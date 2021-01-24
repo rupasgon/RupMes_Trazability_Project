@@ -10,7 +10,7 @@ CREATE SEQUENCE sec_tb_groups_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_groups_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
 
 -- Sequence: sec_tb_users_id_row
 
@@ -23,7 +23,7 @@ CREATE SEQUENCE sec_tb_users_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_users_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
 
 -- Sequence: sec_tb_users_id_row
 
@@ -36,7 +36,7 @@ CREATE SEQUENCE sec_tb_user_status_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_user_status_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 -- Create table: tb_groups
 -- ADM --> User with administrative rights

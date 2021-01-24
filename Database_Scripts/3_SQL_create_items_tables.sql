@@ -39,7 +39,7 @@ CREATE SEQUENCE sec_tb_lines_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_lines_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 --Create table: tb_lines
 DROP TABLE IF EXISTS tb_lines CASCADE;
@@ -60,7 +60,7 @@ CREATE SEQUENCE sec_tb_cells_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_cells_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
     
 --Create table: tb_cells
 DROP TABLE IF EXISTS tb_cells CASCADE;
@@ -82,7 +82,7 @@ CREATE SEQUENCE sec_tb_routings_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_routings_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 -- Create table: tb_routings
 DROP TABLE IF EXISTS tb_routings CASCADE;
@@ -104,7 +104,7 @@ CREATE SEQUENCE sec_tb_models_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_models_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 -- Create table: tb_models
 DROP TABLE IF EXISTS tb_models CASCADE;
@@ -126,7 +126,7 @@ CREATE SEQUENCE sec_tb_status_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_status_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 --Create table: tb_status
 DROP TABLE IF EXISTS tb_status CASCADE;
@@ -147,7 +147,7 @@ CREATE SEQUENCE sec_tb_items_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_tb_items_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
 
 -- Create table: tb_items
 DROP TABLE IF EXISTS tb_items CASCADE;
@@ -189,7 +189,7 @@ CREATE SEQUENCE sec_his_proc_item_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_his_proc_item_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
 
 -- Create table: his_proc_item
 DROP TABLE IF EXISTS his_proc_item CASCADE;
@@ -228,7 +228,7 @@ CREATE SEQUENCE sec_href_cell_line_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_href_cell_line_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 -- Create table: href_cell_line
 DROP TABLE IF EXISTS href_cell_line CASCADE;
@@ -250,7 +250,7 @@ CREATE SEQUENCE sec_href_routing_cell_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_href_routing_cell_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 --Create table: href_routing_cell
 DROP TABLE IF EXISTS href_routing_cell CASCADE;
@@ -272,7 +272,7 @@ CREATE SEQUENCE sec_href_model_routing_id_row
   START 1
   CACHE 1;
 ALTER TABLE sec_href_model_routing_id_row
-  OWNER TO rupasgon;
+  OWNER TO dbadmin;
   
 --Create table: href_model_routing
 DROP TABLE IF EXISTS href_routing_model CASCADE;
