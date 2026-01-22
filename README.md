@@ -11,6 +11,20 @@ This repo provides a Python-driven PostgreSQL schema for a MES trazability datab
 - Services: `src/rupmes/services/`
 - Repositories: `src/rupmes/repositories/`
 
+## Project layout
+
+```
+src/rupmes/
+  core/           # Config and DB session helpers
+  models/         # SQLAlchemy models (tables)
+  repositories/   # Data access layer
+  controllers/    # Business logic
+  services/       # Cross-cutting services (security)
+  views/          # CLI and API entrypoints
+tests/            # Pytest suite
+alembic/          # Migration scripts
+```
+
 ## Quick start
 
 1) Create and activate a virtual environment, then install dependencies:
@@ -32,6 +46,10 @@ set DATABASE_URL=postgresql+psycopg2://USER:PASS@localhost:5432/mes_db
 ```bash
 python -m rupmes init-db
 ```
+
+## CLI
+
+- Initialize DB: `python -m rupmes init-db`
 
 ## API (FastAPI)
 
@@ -63,6 +81,29 @@ Endpoints:
 - `GET /routings/{routing_id}`
 - `PATCH /routings/{routing_id}`
 - `DELETE /routings/{routing_id}`
+
+Example requests:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/statuses
+curl -X POST http://localhost:8000/statuses -H "Content-Type: application/json" \
+  -d "{\"status_id\":\"CUSTOM\",\"description_status\":\"Custom status\"}"
+```
+
+## Tests
+
+Install dev dependencies:
+
+```bash
+pip install -e .[dev]
+```
+
+Run tests:
+
+```bash
+pytest
+```
 
 ## Alembic migrations
 
