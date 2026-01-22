@@ -10,7 +10,8 @@ class RoutingsRepository(BaseRepository):
         return list(self.session.execute(stmt).scalars().all())
 
     def get_routing(self, routing_id: str) -> TbRoutings | None:
-        return self.session.get(TbRoutings, routing_id)
+        stmt = select(TbRoutings).where(TbRoutings.routing_id == routing_id)
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def create_routing(self, routing: TbRoutings) -> TbRoutings:
         self.session.add(routing)

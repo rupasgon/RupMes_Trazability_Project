@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from rupmes.models import Base, TbCells, TbGroups, TbLines, TbModels, TbStatus, TbUserStatus, TbUsers
 from rupmes.services.security import hash_password
@@ -8,7 +9,12 @@ from rupmes.views.api import app, get_db
 
 
 def _make_client():
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(engine, future=True)
 

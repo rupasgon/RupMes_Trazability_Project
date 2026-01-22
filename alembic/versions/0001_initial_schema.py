@@ -19,7 +19,7 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "tb_lines",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("line_id", sa.String(length=50), nullable=False),
         sa.Column("description_line", sa.String(length=50), nullable=False),
         sa.Column(
@@ -28,12 +28,13 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("line_id", name="pk_tb_lines"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_lines"),
+        sa.UniqueConstraint("line_id", name="uq_tb_lines_line_id"),
     )
 
     op.create_table(
         "tb_cells",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("cell_id", sa.String(length=50), nullable=False),
         sa.Column("description_cell", sa.String(length=50), nullable=False),
         sa.Column(
@@ -42,12 +43,13 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("cell_id", name="pk_tb_cells"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_cells"),
+        sa.UniqueConstraint("cell_id", name="uq_tb_cells_cell_id"),
     )
 
     op.create_table(
         "tb_routings",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("routing_id", sa.String(length=50), nullable=False),
         sa.Column("description_routing", sa.String(length=50), nullable=False),
         sa.Column(
@@ -56,12 +58,13 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("routing_id", name="pk_tb_routings"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_routings"),
+        sa.UniqueConstraint("routing_id", name="uq_tb_routings_routing_id"),
     )
 
     op.create_table(
         "tb_models",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("model_id", sa.String(length=50), nullable=False),
         sa.Column("description_model", sa.String(length=50), nullable=False),
         sa.Column(
@@ -70,20 +73,22 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("model_id", name="pk_tb_models"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_models"),
+        sa.UniqueConstraint("model_id", name="uq_tb_models_model_id"),
     )
 
     op.create_table(
         "tb_status",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("status_id", sa.String(length=50), nullable=False),
         sa.Column("description_status", sa.String(length=50), nullable=False),
-        sa.PrimaryKeyConstraint("status_id", name="pk_tb_status"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_status"),
+        sa.UniqueConstraint("status_id", name="uq_tb_status_status_id"),
     )
 
     op.create_table(
         "tb_groups",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("id_group", sa.String(length=10), nullable=False),
         sa.Column("name_group", sa.String(length=50), nullable=False),
         sa.Column("level_group", sa.SmallInteger(), nullable=False),
@@ -93,12 +98,13 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("id_group", name="pk_tb_groups"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_groups"),
+        sa.UniqueConstraint("id_group", name="uq_tb_groups_id_group"),
     )
 
     op.create_table(
         "tb_user_status",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("status_user", sa.String(length=3), nullable=False),
         sa.Column("description_status", sa.String(length=50), nullable=False),
         sa.Column(
@@ -107,12 +113,13 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("status_user", name="pk_tb_user_status"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_user_status"),
+        sa.UniqueConstraint("status_user", name="uq_tb_user_status_status_user"),
     )
 
     op.create_table(
         "tb_users",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("id_user", sa.String(length=50), nullable=False),
         sa.Column("name_user", sa.String(length=50), nullable=False),
         sa.Column("mail_user", sa.String(length=50), nullable=False),
@@ -131,12 +138,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["status_user"], ["tb_user_status.status_user"], name="fk_tb_users_status"
         ),
-        sa.PrimaryKeyConstraint("id_user", name="pk_tb_users"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_users"),
+        sa.UniqueConstraint("id_user", name="uq_tb_users_id_user"),
     )
 
     op.create_table(
         "tb_items",
-        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False, unique=True),
+        sa.Column("id_row", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("item_id", sa.String(length=50), nullable=False),
         sa.Column("model_id", sa.String(length=50), nullable=False),
         sa.Column("line_id", sa.String(length=50), nullable=False),
@@ -181,7 +189,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["status_id"], ["tb_status.status_id"], name="fk_tb_items_status"
         ),
-        sa.PrimaryKeyConstraint("item_id", name="pk_tb_items"),
+        sa.PrimaryKeyConstraint("id_row", name="pk_tb_items"),
+        sa.UniqueConstraint("item_id", name="uq_tb_items_item_id"),
     )
 
     op.create_table(

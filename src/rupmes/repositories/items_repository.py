@@ -10,7 +10,8 @@ class ItemsRepository(BaseRepository):
         return list(self.session.execute(stmt).scalars().all())
 
     def get_item(self, item_id: str) -> TbItems | None:
-        return self.session.get(TbItems, item_id)
+        stmt = select(TbItems).where(TbItems.item_id == item_id)
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def create_item(self, item: TbItems) -> TbItems:
         self.session.add(item)

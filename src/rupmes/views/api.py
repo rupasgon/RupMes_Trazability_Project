@@ -74,7 +74,7 @@ def get_status_endpoint(status_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/statuses", response_model=StatusRead, status_code=status.HTTP_201_CREATED)
-def create_status(payload: StatusCreate, db: Session = Depends(get_db)):
+def create_status_endpoint(payload: StatusCreate, db: Session = Depends(get_db)):
     status_row = TbStatus(status_id=payload.status_id, description_status=payload.description_status)
     try:
         row = create_status(db, status_row)

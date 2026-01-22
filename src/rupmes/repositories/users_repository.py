@@ -10,7 +10,8 @@ class UsersRepository(BaseRepository):
         return list(self.session.execute(stmt).scalars().all())
 
     def get_user(self, id_user: str) -> TbUsers | None:
-        return self.session.get(TbUsers, id_user)
+        stmt = select(TbUsers).where(TbUsers.id_user == id_user)
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def create_user(self, user: TbUsers) -> TbUsers:
         self.session.add(user)

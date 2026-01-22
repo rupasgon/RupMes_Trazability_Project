@@ -9,7 +9,8 @@ class StatusRepository(BaseRepository):
         return list(self.session.execute(select(TbStatus)).scalars().all())
 
     def get_status(self, status_id: str) -> TbStatus | None:
-        return self.session.get(TbStatus, status_id)
+        stmt = select(TbStatus).where(TbStatus.status_id == status_id)
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def create_status(self, status: TbStatus) -> TbStatus:
         self.session.add(status)

@@ -12,7 +12,7 @@ CREATE TABLE tb_groups(
     name_group VARCHAR(50) NOT NULL,
     level_group smallint NOT NULL,
     create_date timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT pk_tb_groups PRIMARY KEY (id_group)
+    CONSTRAINT pk_tb_groups PRIMARY KEY (id_row)
 );
 
 -- Create table: tb_user_status
@@ -22,7 +22,7 @@ CREATE TABLE tb_user_status(
     status_user VARCHAR(3) UNIQUE NOT NULL,
     description_status VARCHAR(50) NOT NULL,
     create_date timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT pk_tb_user_status PRIMARY KEY (status_user)
+    CONSTRAINT pk_tb_user_status PRIMARY KEY (id_row)
 );
 
 -- Create table: tb_users
@@ -36,7 +36,7 @@ CREATE TABLE tb_users(
     status_user VARCHAR(3) NOT NULL,
     pass_hash VARCHAR(255) NOT NULL,
     create_date timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT pk_tb_users PRIMARY KEY (id_user),
+    CONSTRAINT pk_tb_users PRIMARY KEY (id_row),
     CONSTRAINT fk_tb_users_group FOREIGN KEY (id_group) REFERENCES tb_groups (id_group),
     CONSTRAINT fk_tb_users_status FOREIGN KEY (status_user) REFERENCES tb_user_status (status_user)
 );

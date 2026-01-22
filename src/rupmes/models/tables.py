@@ -7,8 +7,8 @@ from .base import Base
 class TbLines(Base):
     __tablename__ = "tb_lines"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    line_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    line_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_line: Mapped[str] = mapped_column(String(50), nullable=False)
     create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
@@ -16,8 +16,8 @@ class TbLines(Base):
 class TbCells(Base):
     __tablename__ = "tb_cells"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    cell_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    cell_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_cell: Mapped[str] = mapped_column(String(50), nullable=False)
     create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
@@ -25,8 +25,8 @@ class TbCells(Base):
 class TbRoutings(Base):
     __tablename__ = "tb_routings"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    routing_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    routing_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_routing: Mapped[str] = mapped_column(String(50), nullable=False)
     create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
@@ -34,8 +34,8 @@ class TbRoutings(Base):
 class TbModels(Base):
     __tablename__ = "tb_models"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    model_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    model_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_model: Mapped[str] = mapped_column(String(50), nullable=False)
     create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
@@ -43,16 +43,16 @@ class TbModels(Base):
 class TbStatus(Base):
     __tablename__ = "tb_status"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    status_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    status_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_status: Mapped[str] = mapped_column(String(50), nullable=False)
 
 
 class TbGroups(Base):
     __tablename__ = "tb_groups"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    id_group: Mapped[str] = mapped_column(String(10), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    id_group: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
     name_group: Mapped[str] = mapped_column(String(50), nullable=False)
     level_group: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
@@ -61,8 +61,8 @@ class TbGroups(Base):
 class TbUserStatus(Base):
     __tablename__ = "tb_user_status"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    status_user: Mapped[str] = mapped_column(String(3), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    status_user: Mapped[str] = mapped_column(String(3), unique=True, nullable=False)
     description_status: Mapped[str] = mapped_column(String(50), nullable=False)
     create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
@@ -70,8 +70,8 @@ class TbUserStatus(Base):
 class TbUsers(Base):
     __tablename__ = "tb_users"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    id_user: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    id_user: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name_user: Mapped[str] = mapped_column(String(50), nullable=False)
     mail_user: Mapped[str] = mapped_column(String(50), nullable=False)
     id_group: Mapped[str] = mapped_column(String(10), ForeignKey("tb_groups.id_group"), nullable=False)
@@ -83,8 +83,8 @@ class TbUsers(Base):
 class TbItems(Base):
     __tablename__ = "tb_items"
 
-    id_row: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
-    item_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    item_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     model_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_models.model_id"), nullable=False)
     line_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_lines.line_id"), nullable=False)
     location_id: Mapped[int] = mapped_column(SmallInteger, nullable=False)
