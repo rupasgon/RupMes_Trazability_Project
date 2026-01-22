@@ -1,4 +1,5 @@
-﻿DROP DATABASE mes_db;
+-- WARNING: This drops the database if it already exists.
+DROP DATABASE IF EXISTS mes_db;
 
 CREATE DATABASE mes_db
   WITH OWNER = rupasgon
