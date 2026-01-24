@@ -15,16 +15,11 @@ class RoutingsRepository(BaseRepository):
 
     def create_routing(self, routing: TbRoutings) -> TbRoutings:
         self.session.add(routing)
-        self.session.commit()
-        self.session.refresh(routing)
         return routing
 
     def update_routing(self, routing: TbRoutings) -> TbRoutings:
         self.session.add(routing)
-        self.session.commit()
-        self.session.refresh(routing)
         return routing
 
     def delete_routing(self, routing: TbRoutings) -> None:
         self.session.delete(routing)
-        self.session.commit()

@@ -1,0 +1,14 @@
+flowchart LR
+  A[Cliente HTTP] --> B[FastAPI Router<br/>views/api.py]
+  B --> C[Controllers<br/>controllers/*.py]
+  C --> D[Repositories<br/>repositories/*.py]
+  D --> E[(PostgreSQL)]
+  C <---> F[Services<br/>services/security.py]
+  B --> G[DB Session<br/>core/db.py]
+  G --> D
+
+  H[CLI init-db<br/>views/cli.py] --> I[db_controller.init_db]
+  I --> J[SQLAlchemy Models<br/>models/tables.py]
+  I --> K[seed_controller.seed_defaults]
+  J --> E
+  K --> E

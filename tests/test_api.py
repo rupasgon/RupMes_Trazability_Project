@@ -26,7 +26,7 @@ def _make_client():
             session.close()
 
     app.dependency_overrides[get_db] = _override_get_db
-    return TestClient(app), SessionLocal()
+    return TestClient(app), SessionLocal
 
 
 def _seed_minimum(session):
@@ -73,8 +73,9 @@ def test_status_crud():
 
 
 def test_user_and_routing_create():
-    client, session = _make_client()
-    _seed_minimum(session)
+    client, session_factory = _make_client()
+    with session_factory() as session:
+        _seed_minimum(session)
     create_user = client.post(
         "/users",
         json={
@@ -93,8 +94,9 @@ def test_user_and_routing_create():
 
 
 def test_item_create_and_get():
-    client, session = _make_client()
-    _seed_minimum(session)
+    client, session_factory = _make_client()
+    with session_factory() as session:
+        _seed_minimum(session)
     create = client.post(
         "/items",
         json={

@@ -14,10 +14,7 @@ class StatusRepository(BaseRepository):
 
     def create_status(self, status: TbStatus) -> TbStatus:
         self.session.add(status)
-        self.session.commit()
-        self.session.refresh(status)
         return status
 
     def delete_status(self, status: TbStatus) -> None:
         self.session.delete(status)
-        self.session.commit()

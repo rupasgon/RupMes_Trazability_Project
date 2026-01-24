@@ -15,14 +15,21 @@ def get_routing(session: Session, routing_id: str):
 
 def create_routing(session: Session, routing: TbRoutings):
     repo = RoutingsRepository(session)
-    return repo.create_routing(routing)
+    routing = repo.create_routing(routing)
+    session.commit()
+    session.refresh(routing)
+    return routing
 
 
 def update_routing(session: Session, routing: TbRoutings):
     repo = RoutingsRepository(session)
-    return repo.update_routing(routing)
+    routing = repo.update_routing(routing)
+    session.commit()
+    session.refresh(routing)
+    return routing
 
 
 def delete_routing(session: Session, routing: TbRoutings):
     repo = RoutingsRepository(session)
-    return repo.delete_routing(routing)
+    repo.delete_routing(routing)
+    session.commit()

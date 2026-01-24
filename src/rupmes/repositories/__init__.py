@@ -1,7 +1,15 @@
 __all__ = [
     "base",
+    "cells_repository",
     "items_repository",
+    "lines_repository",
+    "models_repository",
+    "permissions_repository",
+    "role_permissions_repository",
+    "roles_repository",
     "routings_repository",
+    "sessions_repository",
     "status_repository",
+    "user_roles_repository",
     "users_repository",
 ]

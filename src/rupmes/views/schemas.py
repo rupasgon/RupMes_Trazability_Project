@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class StatusCreate(BaseModel):
@@ -63,7 +63,7 @@ class ItemRead(BaseModel):
 class UserCreate(BaseModel):
     id_user: str = Field(..., max_length=50)
     name_user: str = Field(..., max_length=50)
-    mail_user: str = Field(..., max_length=50)
+    mail_user: EmailStr
     id_group: str = Field(..., max_length=10)
     status_user: str = Field(..., max_length=3)
     password: str = Field(..., min_length=6)
@@ -72,7 +72,7 @@ class UserCreate(BaseModel):
 class UserRead(BaseModel):
     id_user: str
     name_user: str
-    mail_user: str
+    mail_user: EmailStr
     id_group: str
     status_user: str
     create_date: datetime
@@ -110,7 +110,7 @@ class ItemUpdate(BaseModel):
 
 class UserUpdate(BaseModel):
     name_user: Optional[str] = Field(None, max_length=50)
-    mail_user: Optional[str] = Field(None, max_length=50)
+    mail_user: Optional[EmailStr] = None
     id_group: Optional[str] = Field(None, max_length=10)
     status_user: Optional[str] = Field(None, max_length=3)
     password: Optional[str] = Field(None, min_length=6)
@@ -118,3 +118,90 @@ class UserUpdate(BaseModel):
 
 class RoutingUpdate(BaseModel):
     description_routing: Optional[str] = Field(None, max_length=50)
+
+
+class LineCreate(BaseModel):
+    line_id: str = Field(..., max_length=50)
+    description_line: str = Field(..., max_length=50)
+
+
+class LineRead(BaseModel):
+    line_id: str
+    description_line: str
+    create_date: datetime
+
+
+class LineUpdate(BaseModel):
+    description_line: Optional[str] = Field(None, max_length=50)
+
+
+class CellCreate(BaseModel):
+    cell_id: str = Field(..., max_length=50)
+    description_cell: str = Field(..., max_length=50)
+
+
+class CellRead(BaseModel):
+    cell_id: str
+    description_cell: str
+    create_date: datetime
+
+
+class CellUpdate(BaseModel):
+    description_cell: Optional[str] = Field(None, max_length=50)
+
+
+class ModelCreate(BaseModel):
+    model_id: str = Field(..., max_length=50)
+    description_model: str = Field(..., max_length=50)
+
+
+class ModelRead(BaseModel):
+    model_id: str
+    description_model: str
+    create_date: datetime
+
+
+class ModelUpdate(BaseModel):
+    description_model: Optional[str] = Field(None, max_length=50)
+
+
+class LoginRequest(BaseModel):
+    id_user: str = Field(..., max_length=50)
+    password: str = Field(..., min_length=6)
+
+
+class LoginResponse(BaseModel):
+    id_user: str
+    name_user: str
+    mail_user: EmailStr
+    tenant_id: str
+    roles: list[str]
+    permissions: list[str]
+
+
+class RoleCreate(BaseModel):
+    role_id: str = Field(..., max_length=50)
+    description_role: str = Field(..., max_length=100)
+
+
+class RoleRead(BaseModel):
+    role_id: str
+    description_role: str
+    tenant_id: str
+
+
+class RoleUpdate(BaseModel):
+    description_role: Optional[str] = Field(None, max_length=100)
+
+
+class PermissionRead(BaseModel):
+    permission_id: str
+    description_permission: str
+
+
+class RolePermissionsUpdate(BaseModel):
+    permission_ids: list[str]
+
+
+class UserRolesUpdate(BaseModel):
+    role_ids: list[str]

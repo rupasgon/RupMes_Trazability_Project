@@ -15,9 +15,13 @@ def get_status(session: Session, status_id: str):
 
 def create_status(session: Session, status):
     repo = StatusRepository(session)
-    return repo.create_status(status)
+    status = repo.create_status(status)
+    session.commit()
+    session.refresh(status)
+    return status
 
 
 def delete_status(session: Session, status):
     repo = StatusRepository(session)
-    return repo.delete_status(status)
+    repo.delete_status(status)
+    session.commit()

@@ -1,8 +1,16 @@
 __all__ = [
+    "cells_controller",
     "db_controller",
     "items_controller",
+    "lines_controller",
+    "models_controller",
+    "permissions_controller",
+    "role_permissions_controller",
+    "roles_controller",
     "routings_controller",
     "seed_controller",
+    "sessions_controller",
     "status_controller",
+    "user_roles_controller",
     "users_controller",
 ]

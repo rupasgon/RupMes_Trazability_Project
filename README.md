@@ -47,6 +47,42 @@ set DATABASE_URL=postgresql+psycopg2://USER:PASS@localhost:5432/mes_db
 python -m rupmes init-db
 ```
 
+## Frontend (portal)
+
+The frontend lives in `frontend/` and uses Vite + React.
+
+Install dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
+Configure API URL:
+
+```
+copy .env.example .env
+```
+
+Run dev server:
+
+```bash
+npm run dev
+```
+
+Open:
+- `http://localhost:5173`
+
+Docker (frontend + backend):
+
+```bash
+docker compose up --build
+```
+
+Open:
+- API: `http://localhost:8000`
+- Portal: `http://localhost:8080`
+
 ## CLI
 
 - Initialize DB: `python -m rupmes init-db`
@@ -60,6 +96,9 @@ uvicorn rupmes.views.api:app --reload
 ```
 
 Endpoints:
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
 - `GET /health`
 - `GET /statuses`
 - `POST /statuses`
@@ -81,6 +120,15 @@ Endpoints:
 - `GET /routings/{routing_id}`
 - `PATCH /routings/{routing_id}`
 - `DELETE /routings/{routing_id}`
+- `GET /roles`
+- `POST /roles`
+- `PATCH /roles/{role_id}`
+- `DELETE /roles/{role_id}`
+- `GET /roles/{role_id}/permissions`
+- `PUT /roles/{role_id}/permissions`
+- `GET /permissions`
+- `GET /users/{id_user}/roles`
+- `PUT /users/{id_user}/roles`
 
 Example requests:
 
@@ -89,6 +137,38 @@ curl http://localhost:8000/health
 curl http://localhost:8000/statuses
 curl -X POST http://localhost:8000/statuses -H "Content-Type: application/json" \
   -d "{\"status_id\":\"CUSTOM\",\"description_status\":\"Custom status\"}"
+```
+
+## Auth (local)
+
+Defaults (seeded):
+- User `admin` / password `admin123` (role `ADM`)
+- User `machine` / password `machine123` (role `USR`)
+
+Login:
+```bash
+curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" \
+  -d "{\"id_user\":\"admin\",\"password\":\"admin123\"}"
+```
+
+The API sets:
+- `SESSION_COOKIE_NAME` (HttpOnly)
+- `CSRF_COOKIE_NAME` (readable by frontend)
+
+For state-changing requests (POST/PUT/PATCH/DELETE), send:
+- Header: `X-CSRF-Token: <csrf_cookie_value>`
+
+## Auth configuration (.env)
+
+```
+FRONTEND_ORIGINS=http://localhost:5173,http://localhost:3000
+COOKIE_SECURE=false
+COOKIE_SAMESITE=lax
+SESSION_TTL_MINUTES=480
+SESSION_COOKIE_NAME=rupmes_session
+CSRF_COOKIE_NAME=rupmes_csrf
+MULTI_TENANT_ENABLED=false
+DEFAULT_TENANT_ID=DEFAULT
 ```
 
 ## Tests
@@ -111,6 +191,18 @@ pytest
 
 ```bash
 alembic upgrade head
+```
+
+If your DB was created with `create_all` (no Alembic history), stamp it first:
+
+```bash
+alembic stamp head
+```
+
+Rollback:
+
+```bash
+alembic downgrade -1
 ```
 
 2) To create new migrations after changing models:

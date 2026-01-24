@@ -1,4 +1,17 @@
-from sqlalchemy import DateTime, ForeignKey, Identity, Index, Integer, SmallInteger, String, UniqueConstraint, text
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Identity,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -10,7 +23,86 @@ class TbLines(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     line_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_line: Mapped[str] = mapped_column(String(50), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class TbTenants(Base):
+    __tablename__ = "tb_tenants"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    name_tenant: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class TbRoles(Base):
+    __tablename__ = "tb_roles"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    role_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    description_role: Mapped[str] = mapped_column(String(100), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+    __table_args__ = (
+        Index("ix_tb_roles_tenant_id", "tenant_id"),
+    )
+
+
+class TbPermissions(Base):
+    __tablename__ = "tb_permissions"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    permission_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    description_permission: Mapped[str] = mapped_column(String(150), nullable=False)
+
+
+class TbRolePermissions(Base):
+    __tablename__ = "tb_role_permissions"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    role_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_roles.role_id"), nullable=False)
+    permission_id: Mapped[str] = mapped_column(String(100), ForeignKey("tb_permissions.permission_id"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),
+        Index("ix_tb_role_permissions_role_id", "role_id"),
+        Index("ix_tb_role_permissions_permission_id", "permission_id"),
+    )
+
+
+class TbUserRoles(Base):
+    __tablename__ = "tb_user_roles"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    id_user: Mapped[str] = mapped_column(String(50), ForeignKey("tb_users.id_user"), nullable=False)
+    role_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_roles.role_id"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("id_user", "role_id", name="uq_user_role"),
+        Index("ix_tb_user_roles_id_user", "id_user"),
+        Index("ix_tb_user_roles_role_id", "role_id"),
+    )
+
+
+class TbSessions(Base):
+    __tablename__ = "tb_sessions"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    id_user: Mapped[str] = mapped_column(String(50), ForeignKey("tb_users.id_user"), nullable=False)
+    csrf_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(String(200))
+
+    __table_args__ = (
+        Index("ix_tb_sessions_id_user", "id_user"),
+        Index("ix_tb_sessions_expires_at", "expires_at"),
+    )
 
 
 class TbCells(Base):
@@ -19,7 +111,7 @@ class TbCells(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     cell_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_cell: Mapped[str] = mapped_column(String(50), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
 class TbRoutings(Base):
@@ -28,7 +120,7 @@ class TbRoutings(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     routing_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_routing: Mapped[str] = mapped_column(String(50), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
 class TbModels(Base):
@@ -37,7 +129,7 @@ class TbModels(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     model_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_model: Mapped[str] = mapped_column(String(50), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
 class TbStatus(Base):
@@ -55,7 +147,7 @@ class TbGroups(Base):
     id_group: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
     name_group: Mapped[str] = mapped_column(String(50), nullable=False)
     level_group: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
 class TbUserStatus(Base):
@@ -64,7 +156,7 @@ class TbUserStatus(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     status_user: Mapped[str] = mapped_column(String(3), unique=True, nullable=False)
     description_status: Mapped[str] = mapped_column(String(50), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
 class TbUsers(Base):
@@ -74,10 +166,16 @@ class TbUsers(Base):
     id_user: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name_user: Mapped[str] = mapped_column(String(50), nullable=False)
     mail_user: Mapped[str] = mapped_column(String(50), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey("tb_tenants.tenant_id"),
+        nullable=False,
+        server_default=text("'DEFAULT'"),
+    )
     id_group: Mapped[str] = mapped_column(String(10), ForeignKey("tb_groups.id_group"), nullable=False)
     status_user: Mapped[str] = mapped_column(String(3), ForeignKey("tb_user_status.status_user"), nullable=False)
     pass_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
 class TbItems(Base):
@@ -90,8 +188,8 @@ class TbItems(Base):
     location_id: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     cell_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_cells.cell_id"), nullable=False)
     id_user: Mapped[str] = mapped_column(String(50), ForeignKey("tb_users.id_user"), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
-    last_test_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    last_test_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
     status_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_status.status_id"), nullable=False)
     value1_int: Mapped[int | None] = mapped_column(Integer)
     value2_int: Mapped[int | None] = mapped_column(Integer)
@@ -124,8 +222,8 @@ class HisProcItem(Base):
     location_id: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     cell_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_cells.cell_id"), nullable=False)
     id_user: Mapped[str] = mapped_column(String(50), ForeignKey("tb_users.id_user"), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
-    last_test_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    last_test_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
     status_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_status.status_id"), nullable=False)
     value1_int: Mapped[int | None] = mapped_column(Integer)
     value2_int: Mapped[int | None] = mapped_column(Integer)
@@ -150,7 +248,7 @@ class HrefCellLine(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     cell_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_cells.cell_id"), nullable=False)
     line_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_lines.line_id"), nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("cell_id", "line_id", name="uq_href_cell_line_cell_line"),
@@ -166,7 +264,7 @@ class HrefRoutingCell(Base):
     routing_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_routings.routing_id"), nullable=False)
     cell_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_cells.cell_id"), nullable=False)
     location_id: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    create_date: Mapped[str] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("routing_id", "cell_id", "location_id", name="uq_href_routing_cell_route_cell_loc"),
