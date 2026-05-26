@@ -1,14 +1,18 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Identity,
     Index,
     Integer,
+    Numeric,
     SmallInteger,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -34,6 +38,26 @@ class TbTenants(Base):
     name_tenant: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
     create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class TbPortalSettings(Base):
+    __tablename__ = "tb_portal_settings"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), unique=True, nullable=False)
+    portal_title: Mapped[str] = mapped_column(String(100), nullable=False, server_default=text("'RupMes'"))
+    logo_image: Mapped[str | None] = mapped_column(Text)
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    update_date: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint("trim(portal_title) <> ''", name="ck_tb_portal_settings_title_not_blank"),
+        Index("ix_tb_portal_settings_tenant_id", "tenant_id"),
+    )
 
 
 class TbRoles(Base):
@@ -285,4 +309,77 @@ class HrefRoutingModel(Base):
         UniqueConstraint("routing_id", "model_id", "location_id", name="uq_href_routing_model_route_model_loc"),
         Index("ix_href_routing_model_routing_id", "routing_id"),
         Index("ix_href_routing_model_model_id", "model_id"),
+    )
+
+
+class ProductionReport(Base):
+    __tablename__ = "production_report"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), Identity(), primary_key=True)
+    plant_code: Mapped[str | None] = mapped_column(String(50))
+    line_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    station_code: Mapped[str | None] = mapped_column(String(50))
+    machine_code: Mapped[str | None] = mapped_column(String(50))
+    shift_code: Mapped[str | None] = mapped_column(String(20))
+    production_order: Mapped[str | None] = mapped_column(String(100))
+    product_code: Mapped[str | None] = mapped_column(String(100))
+    product_family: Mapped[str | None] = mapped_column(String(100))
+    customer: Mapped[str | None] = mapped_column(String(100))
+    serial_number: Mapped[str] = mapped_column(String(150), nullable=False)
+    result: Mapped[str] = mapped_column(String(20), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(50))
+    error_description: Mapped[str | None] = mapped_column(Text)
+    defect_station: Mapped[str | None] = mapped_column(String(50))
+    production_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    cycle_time_seconds: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    target_cycle_time_seconds: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    component_serial: Mapped[str | None] = mapped_column(String(150))
+    component_lot: Mapped[str | None] = mapped_column(String(100))
+    supplier_code: Mapped[str | None] = mapped_column(String(100))
+    nest_number: Mapped[int | None] = mapped_column(Integer)
+    tool_id: Mapped[str | None] = mapped_column(String(100))
+    program_name: Mapped[str | None] = mapped_column(String(100))
+    software_version: Mapped[str | None] = mapped_column(String(100))
+    is_rework: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"), nullable=False)
+    rework_result: Mapped[str | None] = mapped_column(String(20))
+    rework_datetime: Mapped[datetime | None] = mapped_column(DateTime)
+    source_system: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("result IN ('OK', 'NOK', 'SCRAP', 'REWORK')", name="ck_production_report_result"),
+        CheckConstraint(
+            "rework_result IS NULL OR rework_result IN ('OK', 'NOK', 'SCRAP', 'REWORK')",
+            name="ck_production_report_rework_result",
+        ),
+        CheckConstraint("trim(serial_number) <> ''", name="ck_production_report_serial_not_blank"),
+        CheckConstraint("trim(line_code) <> ''", name="ck_production_report_line_not_blank"),
+        Index("ix_production_report_production_datetime", "production_datetime"),
+        Index("ix_production_report_serial_number", "serial_number"),
+        Index("ix_production_report_line_datetime", "line_code", "production_datetime"),
+        Index("ix_production_report_result", "result"),
+        Index("ix_production_report_error_code", "error_code"),
+    )
+
+
+class ProductionIngestClient(Base):
+    __tablename__ = "production_ingest_clients"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), Identity(), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(String(200), nullable=False)
+    api_key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    plant_code: Mapped[str | None] = mapped_column(String(50))
+    line_code: Mapped[str | None] = mapped_column(String(50))
+    station_code: Mapped[str | None] = mapped_column(String(50))
+    machine_code: Mapped[str | None] = mapped_column(String(50))
+    source_system: Mapped[str | None] = mapped_column(String(100))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("trim(client_id) <> ''", name="ck_production_ingest_clients_client_id_not_blank"),
+        CheckConstraint("trim(description) <> ''", name="ck_production_ingest_clients_description_not_blank"),
+        Index("ix_production_ingest_clients_client_id", "client_id"),
+        Index("ix_production_ingest_clients_active", "is_active"),
     )

@@ -50,3 +50,7 @@ def get_default_tenant_id() -> str:
 
 def is_multi_tenant_enabled() -> bool:
     return _get_env_bool("MULTI_TENANT_ENABLED", False)
+
+
+def get_production_ingest_api_key() -> str:
+    return os.getenv("PRODUCTION_INGEST_API_KEY", "").strip()

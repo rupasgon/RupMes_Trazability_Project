@@ -1,9 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { request } from "../api.js";
 
 export default function LoginPage({ onLogin, tenantId, setTenantId, t, lang, setLang, theme, setTheme }) {
   const [form, setForm] = useState({ id_user: "", password: "" });
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [branding, setBranding] = useState({ portal_title: "RupMes", logo_image: null });
+
+  useEffect(() => {
+    const targetTenant = tenantId || "DEFAULT";
+    const loadBranding = async () => {
+      try {
+        const data = await request("/portal-settings", { tenantId: targetTenant });
+        setBranding(data);
+      } catch {
+        setBranding({ portal_title: "RupMes", logo_image: null });
+      }
+    };
+
+    loadBranding();
+
+    const handleBrandingChanged = () => {
+      loadBranding().catch(() => {});
+    };
+
+    window.addEventListener("rupmes-branding-changed", handleBrandingChanged);
+    return () => window.removeEventListener("rupmes-branding-changed", handleBrandingChanged);
+  }, [tenantId]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -21,8 +44,13 @@ export default function LoginPage({ onLogin, tenantId, setTenantId, t, lang, set
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <h2>{t("app.title")}</h2>
-        <p>{t("login.subtitle")}</p>
+        <div className="login-brand">
+          {branding.logo_image ? <img className="login-logo" src={branding.logo_image} alt={branding.portal_title || "RupMes"} /> : <div className="brand-badge" />}
+          <div>
+            <h2>{branding.portal_title || t("app.title")}</h2>
+            <p>{t("login.subtitle")}</p>
+          </div>
+        </div>
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label>{t("login.user")}</label>

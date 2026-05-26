@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from rupmes.controllers.production_ingest_clients_controller import get_production_ingest_client
 from rupmes.controllers.permissions_controller import list_permissions
 from rupmes.controllers.role_permissions_controller import list_role_permissions, replace_role_permissions
 from rupmes.controllers.roles_controller import create_role, delete_role, get_role, list_roles, update_role
@@ -11,6 +12,7 @@ from rupmes.core.config import (
     get_cookie_samesite,
     get_cookie_secure,
     get_csrf_cookie_name,
+    get_production_ingest_api_key,
     get_session_cookie_name,
     get_session_ttl_minutes,
 )
@@ -18,6 +20,7 @@ from rupmes.core.deps import get_db
 from rupmes.core.tenant import resolve_tenant_id
 from rupmes.models import TbRoles
 from rupmes.services.auth import authenticate_user, create_user_session, get_valid_session
+from rupmes.services.security import verify_password
 from rupmes.views.schemas import (
     LoginRequest,
     LoginResponse,
@@ -91,6 +94,35 @@ def require_csrf(request: Request, session_row) -> None:
     csrf_header = request.headers.get("X-CSRF-Token")
     if not csrf_header or csrf_header != session_row.csrf_token:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF token invalid")
+
+
+def require_production_ingest_api_key(request: Request, db: Session, payload=None):
+    configured_key = get_production_ingest_api_key()
+    client_id = request.headers.get("X-Client-Id")
+    provided_key = request.headers.get("X-API-Key")
+    if client_id:
+        client = get_production_ingest_client(db, client_id)
+        if not client or not client.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid ingest client")
+        if not provided_key or not verify_password(provided_key, client.api_key_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+        if payload is not None:
+            if client.plant_code and payload.plant_code != client.plant_code:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Plant scope mismatch")
+            if client.line_code and payload.line_code != client.line_code:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Line scope mismatch")
+            if client.station_code and payload.station_code != client.station_code:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Station scope mismatch")
+            if client.machine_code and payload.machine_code != client.machine_code:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Machine scope mismatch")
+            if client.source_system and payload.source_system != client.source_system:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Source system scope mismatch")
+        return client
+    if configured_key and provided_key == configured_key:
+        return None
+    if not configured_key and not client_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Production ingest credentials not configured")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
 
 @router.post("/auth/login", response_model=LoginResponse)

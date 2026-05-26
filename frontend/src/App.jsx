@@ -11,6 +11,7 @@ import LinesPage from "./pages/LinesPage.jsx";
 import CellsPage from "./pages/CellsPage.jsx";
 import ModelsPage from "./pages/ModelsPage.jsx";
 import StatusesPage from "./pages/StatusesPage.jsx";
+import ReportsPage from "./pages/ReportsPage.jsx";
 import "./styles.css";
 
 const CSRF_COOKIE = import.meta.env.VITE_CSRF_COOKIE_NAME || "rupmes_csrf";
@@ -243,6 +244,26 @@ export default function App() {
                 tenantId={tenantId}
                 setTenantId={setTenantId}
                 csrfToken={csrfToken}
+                t={t}
+                lang={lang}
+                setLang={setLang}
+                theme={theme}
+                setTheme={setTheme}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            auth ? (
+              <ReportsPage
+                auth={auth}
+                onLogout={handleLogout}
+                tenantId={tenantId}
+                setTenantId={setTenantId}
                 t={t}
                 lang={lang}
                 setLang={setLang}

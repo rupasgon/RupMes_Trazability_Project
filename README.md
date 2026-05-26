@@ -100,6 +100,21 @@ Endpoints:
 - `POST /auth/logout`
 - `GET /auth/me`
 - `GET /health`
+- `POST /production-reports`
+- `POST /production-reports/ingest`
+- `GET /production-ingest-clients`
+- `GET /production-ingest-clients/{client_id}`
+- `POST /production-ingest-clients`
+- `PATCH /production-ingest-clients/{client_id}`
+- `DELETE /production-ingest-clients/{client_id}`
+- `GET /production-reports/{report_id}`
+- `GET /production-reports/traceability/{serial_number}`
+- `GET /production-reports/analytics/daily-total`
+- `GET /production-reports/analytics/by-line`
+- `GET /production-reports/analytics/ok-nok-by-shift`
+- `GET /production-reports/analytics/ftq-fpy`
+- `GET /production-reports/analytics/top-defects`
+- `GET /production-reports/analytics/average-cycle-time`
 - `GET /statuses`
 - `POST /statuses`
 - `GET /statuses/{status_id}`
@@ -138,6 +153,84 @@ curl http://localhost:8000/statuses
 curl -X POST http://localhost:8000/statuses -H "Content-Type: application/json" \
   -d "{\"status_id\":\"CUSTOM\",\"description_status\":\"Custom status\"}"
 ```
+
+## Production reports
+
+The project now supports industrial production reporting in a single PostgreSQL database using dimensional fields such as `plant_code`, `line_code`, `station_code`, and `machine_code`. Lines and plants are not split across separate databases.
+
+Main table:
+- `public.production_report`
+
+Main files:
+- ORM model: `src/rupmes/models/tables.py`
+- Repository/controller/API: `src/rupmes/repositories/production_report_repository.py`, `src/rupmes/controllers/production_report_controller.py`, `src/rupmes/views/api.py`
+- Alembic migration: `alembic/versions/b1f302d8a9b1_add_production_report.py`, `alembic/versions/c42d0d7f2a10_add_production_ingest_clients.py`
+- SQL scripts: `Database_Scripts/SQL_create_production_report.sql`, `Database_Scripts/SQL_create_production_report_indexes.sql`, `Database_Scripts/SQL_insert_production_report_samples.sql`, `Database_Scripts/SQL_create_production_ingest_clients.sql`
+
+Validation rules:
+- `result` only accepts `OK`, `NOK`, `SCRAP`, `REWORK`
+- `serial_number` cannot be blank
+- `line_code` is required and cannot be blank
+- `production_datetime` is required
+
+Example insert through API:
+
+```bash
+curl -X POST http://localhost:8000/production-reports \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: <csrf_cookie_value>" \
+  -d "{\"plant_code\":\"PLANT-ES\",\"line_code\":\"LINE-A\",\"serial_number\":\"SN-000001\",\"result\":\"OK\",\"production_datetime\":\"2026-05-26T06:15:00\",\"cycle_time_seconds\":42.315,\"target_cycle_time_seconds\":45.000,\"source_system\":\"MES\"}"
+```
+
+Recommended machine-to-machine ingestion from production lines:
+
+- Preferred model: create one ingest client per line, station, PLC, SCADA, or MES connector.
+- Each client has its own `client_id` and `api_key`.
+- Authentication is done with headers `X-Client-Id` and `X-API-Key`, so no browser login or CSRF flow is required.
+- Keep `plant_code`, `line_code`, `station_code`, and `machine_code` in the payload to identify origin within the same PostgreSQL database.
+- You can optionally scope each ingest client to a fixed `plant_code`, `line_code`, `station_code`, `machine_code`, or `source_system`. If the payload does not match its scope, the API rejects the insert.
+- `PRODUCTION_INGEST_API_KEY` remains available as a global fallback for backward compatibility, but per-client credentials are the recommended setup.
+
+Create an ingest client as admin:
+
+```bash
+curl -X POST http://localhost:8000/production-ingest-clients \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: <csrf_cookie_value>" \
+  -d "{\"client_id\":\"LINE-A-PLC\",\"description\":\"PLC linea A\",\"api_key\":\"super-secret-line-a\",\"plant_code\":\"PLANT-ES\",\"line_code\":\"LINE-A\",\"source_system\":\"PLC\",\"is_active\":true}"
+```
+
+Example line ingestion:
+
+```bash
+curl -X POST http://localhost:8000/production-reports/ingest \
+  -H "Content-Type: application/json" \
+  -H "X-Client-Id: LINE-A-PLC" \
+  -H "X-API-Key: super-secret-line-a" \
+  -d "{\"plant_code\":\"PLANT-ES\",\"line_code\":\"LINE-A\",\"station_code\":\"ST-10\",\"machine_code\":\"MC-100\",\"shift_code\":\"M1\",\"serial_number\":\"SN-000001\",\"result\":\"OK\",\"production_datetime\":\"2026-05-26T06:15:00\",\"cycle_time_seconds\":42.315,\"target_cycle_time_seconds\":45.000,\"source_system\":\"PLC\"}"
+```
+
+Usage model:
+- `POST /production-reports/ingest`: for automatic inserts from industrial lines and machines
+- `POST /production-ingest-clients`: for provisioning credentials per line/machine from the admin portal or backoffice
+- `POST /production-reports`: for authenticated portal or backoffice users
+- Analytics endpoints: for reporting and dashboards
+
+Example analytics calls:
+
+```bash
+curl "http://localhost:8000/production-reports/analytics/daily-total?date_from=2026-05-01&date_to=2026-05-31"
+curl "http://localhost:8000/production-reports/analytics/by-line?date_from=2026-05-01&date_to=2026-05-31&plant_code=PLANT-ES"
+curl "http://localhost:8000/production-reports/analytics/ok-nok-by-shift?date_from=2026-05-26&date_to=2026-05-26&line_code=LINE-A"
+curl "http://localhost:8000/production-reports/analytics/ftq-fpy?date_from=2026-05-26&date_to=2026-05-26"
+curl "http://localhost:8000/production-reports/analytics/top-defects?date_from=2026-05-26&date_to=2026-05-26&limit=10"
+curl "http://localhost:8000/production-reports/traceability/SN-000002"
+curl "http://localhost:8000/production-reports/analytics/average-cycle-time?date_from=2026-05-01&date_to=2026-05-31"
+```
+
+Metric notes:
+- FTQ: first recorded attempt per serial, line, and day with result `OK`
+- FPY: serials that completed the filtered day and line without any non-`OK` event and without rework
 
 ## Auth (local)
 

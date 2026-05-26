@@ -1,26 +1,54 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { request } from "../api.js";
 
 export default function Layout({ auth, onLogout, active, tenantId, setTenantId, lang, setLang, theme, setTheme, t, children }) {
   const permissions = auth.permissions || [];
   const isAdmin = auth.roles?.includes("ADM");
-  const canUsers = permissions.includes("users.read") && isAdmin;
-  const canRoles = permissions.includes("roles.read") && isAdmin;
-  const canAdmin = canUsers || canRoles;
+  const canAdmin = permissions.includes("users.read");
   const canItems = permissions.includes("items.read");
+  const canReports = permissions.includes("production.read");
   const canMasters = permissions.includes("masters.read");
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("rupmes_sidebar") === "collapsed");
+  const [branding, setBranding] = useState({ portal_title: "RupMes", logo_image: null });
 
   useEffect(() => {
     localStorage.setItem("rupmes_sidebar", collapsed ? "collapsed" : "expanded");
   }, [collapsed]);
 
+  useEffect(() => {
+    const targetTenant = tenantId || auth.tenant_id || "DEFAULT";
+    const loadBranding = async () => {
+      try {
+        const data = await request("/portal-settings", { tenantId: targetTenant });
+        setBranding(data);
+      } catch {
+        setBranding({ portal_title: "RupMes", logo_image: null });
+      }
+    };
+
+    loadBranding();
+
+    const handleBrandingChanged = () => {
+      loadBranding().catch(() => {});
+    };
+
+    window.addEventListener("rupmes-branding-changed", handleBrandingChanged);
+    return () => window.removeEventListener("rupmes-branding-changed", handleBrandingChanged);
+  }, [tenantId, auth.tenant_id]);
+
   return (
     <div className={`app-shell ${collapsed ? "collapsed" : ""}`}>
       <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
         <div className="brand">
-          <div className="brand-badge" />
-          <h1>RupMes</h1>
+          {branding.logo_image ? (
+            <img className="brand-logo" src={branding.logo_image} alt={branding.portal_title || "RupMes"} />
+          ) : (
+            <div className="brand-badge" />
+          )}
+          <div className="brand-copy">
+            <h1>{branding.portal_title || "RupMes"}</h1>
+          </div>
           <button
             className="collapse-toggle"
             type="button"
@@ -46,6 +74,12 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
             <Link className={`nav-link ${active === "items" ? "active" : ""}`} to="/items" title={t("nav.items")}>
               <span className="nav-icon">P</span>
               <span className="nav-text">{t("nav.items")}</span>
+            </Link>
+          ) : null}
+          {canReports ? (
+            <Link className={`nav-link ${active === "reports" ? "active" : ""}`} to="/reports" title={t("nav.reports")}>
+              <span className="nav-icon">R</span>
+              <span className="nav-text">{t("nav.reports")}</span>
             </Link>
           ) : null}
           {canMasters ? (
@@ -86,6 +120,7 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
               value={tenantId}
               onChange={(event) => setTenantId(event.target.value)}
               placeholder="DEFAULT"
+              disabled={!isAdmin}
             />
             <div className="muted" style={{ marginTop: 12 }}>{t("language.label")}</div>
             <select className="inline-input" value={lang} onChange={(event) => setLang(event.target.value)}>
@@ -101,7 +136,9 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
           </div>
         </div>
       </aside>
-      <main className="content">{children}</main>
+      <main className="content">
+        <div className="content-scroll">{children}</div>
+      </main>
     </div>
   );
 }

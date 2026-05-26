@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from rupmes.models import (
     TbGroups,
     TbPermissions,
+    TbPortalSettings,
     TbRolePermissions,
     TbRoles,
     TbStatus,
@@ -54,6 +55,9 @@ DEFAULT_PERMISSIONS = [
     ("users.write", "Create/update/delete users"),
     ("roles.read", "Read roles"),
     ("roles.write", "Create/update/delete roles"),
+    ("production.read", "Read production reports and analytics"),
+    ("production.write", "Create production reports"),
+    ("production.admin", "Manage production ingestion clients"),
     ("items.read", "Read items"),
     ("items.write", "Create/update/delete items"),
     ("masters.read", "Read master data"),
@@ -68,6 +72,9 @@ DEFAULT_ROLE_PERMISSIONS = {
         "users.write",
         "roles.read",
         "roles.write",
+        "production.read",
+        "production.write",
+        "production.admin",
         "items.read",
         "items.write",
         "masters.read",
@@ -75,7 +82,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         "routings.read",
         "routings.write",
     ],
-    "USR": ["users.read", "items.read", "masters.read", "routings.read"],
+    "USR": ["users.read", "production.read", "items.read", "masters.read", "routings.read"],
 }
 
 
@@ -92,6 +99,10 @@ def seed_defaults(engine) -> None:
         if not _has_any_rows(session, TbTenants):
             tenant_id, name_tenant = DEFAULT_TENANT
             session.add(TbTenants(tenant_id=tenant_id, name_tenant=name_tenant))
+
+        if not _has_any_rows(session, TbPortalSettings):
+            tenant_id, name_tenant = DEFAULT_TENANT
+            session.add(TbPortalSettings(tenant_id=tenant_id, portal_title=name_tenant, logo_image=None))
 
         if not _has_any_rows(session, TbStatus):
             session.add_all(

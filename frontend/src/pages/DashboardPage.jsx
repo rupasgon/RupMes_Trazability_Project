@@ -14,12 +14,16 @@ export default function DashboardPage({ auth, onLogout, tenantId, setTenantId, t
       theme={theme}
       setTheme={setTheme}
     >
-      <div className="hero card">
-        <div>
-          <h2>{t("dashboard.title")}, {auth.name_user}</h2>
-          <p>{t("dashboard.subtitle")}</p>
+      <div className="page-header-shell">
+        <div className="card page-header">
+          <div className="page-header-copy">
+            <h2>{t("dashboard.title")}, {auth.name_user}</h2>
+            <p>{t("dashboard.subtitle")}</p>
+          </div>
+          <div className="page-header-meta">
+            <div className="badge">{t("common.tenant")}: {auth.tenant_id}</div>
+          </div>
         </div>
-        <div className="badge">{t("common.tenant")}: {auth.tenant_id}</div>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
