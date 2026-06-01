@@ -1,0 +1,13 @@
+[Unit]
+Description=RupMes production connector
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_ROOT__
+ExecStart=__PROJECT_ROOT__/production_connector/.venv/bin/python -m rupmes_connector run --config __CONFIG_PATH__
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

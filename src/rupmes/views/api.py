@@ -72,7 +72,7 @@ from rupmes.controllers.users_controller import (
     list_users,
     update_user,
 )
-from rupmes.controllers.user_roles_controller import replace_user_roles
+from rupmes.controllers.user_roles_controller import list_user_roles, replace_user_roles
 from rupmes.core.config import get_frontend_origins
 from rupmes.core.deps import get_db
 from rupmes.core.i18n import get_lang, translate_error, translate_validation

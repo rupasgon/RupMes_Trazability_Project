@@ -49,7 +49,7 @@ export default function App() {
 
   useEffect(() => {
     checkSession();
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     localStorage.setItem("rupmes_tenant", tenantId);

@@ -251,7 +251,7 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
             <p>{t("items.subtitle")}</p>
           </div>
           <div className="page-header-meta">
-            <div className="badge">{t("common.tenant")}: {auth.tenant_id}</div>
+            <div className="badge">{t("common.tenant")}: {tenantId || auth.tenant_id || "DEFAULT"}</div>
           </div>
         </div>
 

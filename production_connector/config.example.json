@@ -1,0 +1,66 @@
+{
+  "api": {
+    "base_url": "http://localhost:8000",
+    "endpoint": "/production-reports/ingest",
+    "client_id": "LINE-A-PLC",
+    "api_key": "super-secret-line-a",
+    "timeout_seconds": 30,
+    "verify_tls": true
+  },
+  "source": {
+    "type": "sql",
+    "connection_url": "mysql+pymysql://user:pass@localhost:3306/mes_source",
+    "schema": null,
+    "table": "production_events",
+    "query": null,
+    "date_field": "event_ts",
+    "id_field": "id",
+    "batch_size": 500,
+    "extra_filters": []
+  },
+  "payload": {
+    "required_fields": [
+      "line_code",
+      "serial_number",
+      "result",
+      "production_datetime"
+    ],
+    "drop_null_fields": true,
+    "mappings": {
+      "plant_code": { "constant": "PLANT-ES" },
+      "line_code": { "source": "line_name", "transform": "string" },
+      "station_code": { "source": "station_name", "transform": "string" },
+      "machine_code": { "source": "machine_name", "transform": "string" },
+      "shift_code": { "source": "shift_code", "transform": "string" },
+      "serial_number": { "source": "serial_no", "transform": "string" },
+      "result": {
+        "source": "status_code",
+        "transform": "string",
+        "value_map": {
+          "PASS": "OK",
+          "FAIL": "NOK",
+          "SCRAP": "SCRAP",
+          "REWORK": "REWORK"
+        }
+      },
+      "production_datetime": { "source": "event_ts", "transform": "datetime" },
+      "cycle_time_seconds": { "source": "cycle_seconds", "transform": "float" },
+      "target_cycle_time_seconds": { "source": "target_cycle_seconds", "transform": "float" },
+      "error_code": { "source": "defect_code", "transform": "string" },
+      "error_description": { "source": "defect_text", "transform": "string" },
+      "is_rework": { "source": "reworked", "transform": "bool" },
+      "source_system": { "constant": "MYSQL-BRIDGE" }
+    }
+  },
+  "state": {
+    "checkpoint_file": "production_connector/state/line_a.json",
+    "initial_value": "2026-01-01T00:00:00"
+  },
+  "runtime": {
+    "poll_interval_seconds": 30,
+    "log_level": "INFO",
+    "dry_run": false,
+    "stop_on_error": false,
+    "max_batches_per_cycle": 100
+  }
+}

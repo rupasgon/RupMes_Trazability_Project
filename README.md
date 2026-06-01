@@ -83,6 +83,11 @@ Open:
 - API: `http://localhost:8000`
 - Portal: `http://localhost:8080`
 
+External production connector:
+
+- Windows/Linux connector for reading source DB rows and pushing them to `/production-reports/ingest`
+- Docs and install assets: `production_connector/`
+
 ## CLI
 
 - Initialize DB: `python -m rupmes init-db`
@@ -209,6 +214,89 @@ curl -X POST http://localhost:8000/production-reports/ingest \
   -H "X-API-Key: super-secret-line-a" \
   -d "{\"plant_code\":\"PLANT-ES\",\"line_code\":\"LINE-A\",\"station_code\":\"ST-10\",\"machine_code\":\"MC-100\",\"shift_code\":\"M1\",\"serial_number\":\"SN-000001\",\"result\":\"OK\",\"production_datetime\":\"2026-05-26T06:15:00\",\"cycle_time_seconds\":42.315,\"target_cycle_time_seconds\":45.000,\"source_system\":\"PLC\"}"
 ```
+
+Production report API contract:
+
+- `POST /production-reports`
+  - Intended for authenticated portal or backoffice users.
+  - Requires a valid session cookie plus `X-CSRF-Token`.
+- `POST /production-reports/ingest`
+  - Intended for PLC, SCADA, MES connectors, industrial gateways, or machine-to-machine integrations.
+  - Requires `X-Client-Id` and `X-API-Key`.
+
+Minimum payload required for inserts:
+
+```json
+{
+  "line_code": "LINE-A",
+  "serial_number": "SN-000001",
+  "result": "OK",
+  "production_datetime": "2026-05-26T06:15:00"
+}
+```
+
+Recommended payload for useful reporting:
+
+```json
+{
+  "plant_code": "PLANT-ES",
+  "line_code": "LINE-A",
+  "station_code": "ST-10",
+  "machine_code": "MC-100",
+  "shift_code": "M1",
+  "production_order": "PO-2026-0001",
+  "product_code": "MODEL-X",
+  "product_family": "FAMILY-A",
+  "customer": "CUSTOMER-1",
+  "serial_number": "SN-000001",
+  "result": "OK",
+  "error_code": null,
+  "error_description": null,
+  "defect_station": null,
+  "production_datetime": "2026-05-26T06:15:00",
+  "cycle_time_seconds": 42.315,
+  "target_cycle_time_seconds": 45.000,
+  "component_serial": "CMP-0001",
+  "component_lot": "LOT-240526",
+  "supplier_code": "SUP-01",
+  "nest_number": 1,
+  "tool_id": "TOOL-10",
+  "program_name": "PROGRAM-A",
+  "software_version": "1.2.3",
+  "is_rework": false,
+  "rework_result": null,
+  "rework_datetime": null,
+  "source_system": "MES"
+}
+```
+
+Fields that matter most for reports:
+
+- `production_datetime`: required for all time-based analytics
+- `line_code`: required for all line-based analytics
+- `serial_number`: required for traceability and FTQ/FPY
+- `result`: required for quality metrics
+- `plant_code`: recommended for plant filtering
+- `shift_code`: recommended for OK/NOK by shift
+- `cycle_time_seconds`: required for average cycle time analytics
+- `error_code` and `error_description`: recommended for top defects
+- `is_rework`: important for FPY logic
+- `station_code` and `machine_code`: recommended for detailed traceability
+
+How fields are used by analytics:
+
+- Daily production: `production_datetime`
+- Production by line: `line_code`, `production_datetime`
+- OK/NOK by shift: `shift_code`, `result`
+- FTQ/FPY: `line_code`, `serial_number`, `result`, `production_datetime`, `is_rework`
+- Top defects: `error_code`, `error_description`
+- Average cycle time: `line_code`, `cycle_time_seconds`
+- Serial traceability: `serial_number`, plus ideally `station_code` and `machine_code`
+
+Interactive API documentation:
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 Usage model:
 - `POST /production-reports/ingest`: for automatic inserts from industrial lines and machines

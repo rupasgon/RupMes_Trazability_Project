@@ -1,6 +1,8 @@
-﻿import Layout from "../ui/Layout.jsx";
+import Layout from "../ui/Layout.jsx";
 
 export default function DashboardPage({ auth, onLogout, tenantId, setTenantId, t, lang, setLang, theme, setTheme }) {
+  const currentTenant = tenantId || auth.tenant_id || "DEFAULT";
+
   return (
     <Layout
       auth={auth}
@@ -21,7 +23,7 @@ export default function DashboardPage({ auth, onLogout, tenantId, setTenantId, t
             <p>{t("dashboard.subtitle")}</p>
           </div>
           <div className="page-header-meta">
-            <div className="badge">{t("common.tenant")}: {auth.tenant_id}</div>
+            <div className="badge">{t("common.tenant")}: {currentTenant}</div>
           </div>
         </div>
       </div>
