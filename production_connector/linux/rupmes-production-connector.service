@@ -5,7 +5,7 @@ After=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=__PROJECT_ROOT__
-ExecStart=__PROJECT_ROOT__/production_connector/.venv/bin/python -m rupmes_connector run --config __CONFIG_PATH__
+ExecStart=__EXEC_START__
 Restart=always
 RestartSec=10
 

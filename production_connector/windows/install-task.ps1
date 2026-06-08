@@ -12,7 +12,8 @@ param(
 
 $connectorRoot = Join-Path $ProjectRoot "production_connector"
 $distRoot = if ([string]::IsNullOrWhiteSpace($BundleRoot)) { Join-Path $connectorRoot "dist\windows\cli" } else { $BundleRoot }
-$bundleExe = Join-Path $distRoot "rupmes-connector.exe"
+$bundleRootPath = Join-Path $distRoot "rupmes-connector"
+$bundleExe = Join-Path $bundleRootPath "rupmes-connector.exe"
 $venvPath = Join-Path $connectorRoot ".venv"
 $pythonVenv = Join-Path $venvPath "Scripts\python.exe"
 

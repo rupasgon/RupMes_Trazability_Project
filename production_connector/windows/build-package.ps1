@@ -11,6 +11,8 @@ param(
 $connectorRoot = Join-Path $ProjectRoot "production_connector"
 $windowsRoot = Join-Path $connectorRoot "windows"
 $distRoot = Join-Path $connectorRoot "dist\windows"
+$cliBundleRoot = Join-Path $distRoot "cli\rupmes-connector"
+$serviceBundleRoot = Join-Path $distRoot "service\rupmes-connector-service"
 $releaseRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) { Join-Path $connectorRoot "release\windows" } else { $OutputRoot }
 $packageRoot = Join-Path $releaseRoot "RupMesProductionConnector"
 $packageConnectorRoot = Join-Path $packageRoot "production_connector"
@@ -27,8 +29,8 @@ if ($BuildBundle) {
   if ($LASTEXITCODE -ne 0) { throw "Unable to build Windows bundle" }
 }
 
-$cliExe = Join-Path $distRoot "cli\rupmes-connector.exe"
-$serviceExe = Join-Path $distRoot "service\rupmes-connector-service.exe"
+$cliExe = Join-Path $cliBundleRoot "rupmes-connector.exe"
+$serviceExe = Join-Path $serviceBundleRoot "rupmes-connector-service.exe"
 
 if (-not (Test-Path $cliExe)) {
   throw "CLI bundle not found. Run build-bundle.ps1 first or use -BuildBundle."
@@ -53,8 +55,8 @@ Copy-Item -Path (Join-Path $windowsRoot "install-service.ps1") -Destination $pac
 Copy-Item -Path (Join-Path $windowsRoot "uninstall-task.ps1") -Destination $packageWindowsRoot -Force
 Copy-Item -Path (Join-Path $windowsRoot "uninstall-service.ps1") -Destination $packageWindowsRoot -Force
 
-Copy-Item -Path (Join-Path $distRoot "cli\*") -Destination $packageCliRoot -Recurse -Force
-Copy-Item -Path (Join-Path $distRoot "service\*") -Destination $packageServiceRoot -Recurse -Force
+Copy-Item -Path (Join-Path $cliBundleRoot "*") -Destination $packageCliRoot -Recurse -Force
+Copy-Item -Path (Join-Path $serviceBundleRoot "*") -Destination $packageServiceRoot -Recurse -Force
 
 if (-not [string]::IsNullOrWhiteSpace($ConfigPath)) {
   Copy-Item -Path $ConfigPath -Destination (Join-Path $packageConnectorRoot "config.json") -Force

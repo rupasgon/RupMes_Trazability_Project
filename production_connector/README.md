@@ -34,11 +34,16 @@ Configurable Windows/Linux gateway that reads industrial source data and pushes 
 ## Structure
 
 - Example config: [config.example.json](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\config.example.json)
+- Windows deployment guide: [WINDOWS_DEPLOYMENT.md](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\WINDOWS_DEPLOYMENT.md)
+- Linux deployment guide: [LINUX_DEPLOYMENT.md](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\LINUX_DEPLOYMENT.md)
 - Windows scheduled task install: [windows/install-task.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\install-task.ps1)
 - Windows service install: [windows/install-service.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\install-service.ps1)
 - Windows scheduled task uninstall: [windows/uninstall-task.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\uninstall-task.ps1)
 - Windows service uninstall: [windows/uninstall-service.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\uninstall-service.ps1)
 - Linux install: [linux/install.sh](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\install.sh)
+- Linux uninstall: [linux/uninstall.sh](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\uninstall.sh)
+- Linux bundle build: [linux/build-bundle.sh](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\build-bundle.sh)
+- Linux package build: [linux/build-package.sh](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\build-package.sh)
 - Linux service unit: [linux/rupmes-production-connector.service](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\rupmes-production-connector.service)
 
 ## Install
@@ -64,8 +69,8 @@ cd C:\path\to\project
 
 This generates:
 
-- `production_connector/dist/windows/cli/rupmes-connector.exe`
-- `production_connector/dist/windows/service/rupmes-connector-service.exe`
+- `production_connector/dist/windows/cli/rupmes-connector/rupmes-connector.exe`
+- `production_connector/dist/windows/service/rupmes-connector-service/rupmes-connector-service.exe`
 
 #### Build the Windows client package
 
@@ -106,7 +111,7 @@ cd C:\path\to\project
 ```
 
 The script:
-- uses `production_connector/dist/windows/service/rupmes-connector-service.exe` when available
+- uses `production_connector/dist/windows/service/rupmes-connector-service/rupmes-connector-service.exe` when available
 - installs a Windows service called `RupMesProductionConnectorService`
 - writes service settings next to the service runtime
 - starts the service automatically
@@ -138,7 +143,7 @@ cd C:\path\to\project
 ```
 
 The script:
-- uses `production_connector/dist/windows/cli/rupmes-connector.exe` when available
+- uses `production_connector/dist/windows/cli/rupmes-connector/rupmes-connector.exe` when available
 - creates a scheduled task called `RupMesProductionConnector`
 
 If the bundle is not present, the script falls back to the Python-based mode for development use.
@@ -164,6 +169,52 @@ cd C:\path\to\project
 
 ### Linux
 
+Recommended mode:
+
+- Production: `systemd` service with bundled executable
+- Lab or quick pilot: Python fallback mode
+
+#### Build the Linux bundle
+
+Build this once on a packaging machine, then copy the generated `production_connector/dist/linux/` folder to the target machine.
+
+```bash
+cd /path/to/project
+./production_connector/linux/build-bundle.sh /path/to/project
+```
+
+This generates:
+
+- `production_connector/dist/linux/cli/rupmes-connector/rupmes-connector`
+
+#### Build the Linux client package
+
+To prepare a client-ready package automatically:
+
+```bash
+cd /path/to/project
+BUILD_BUNDLE=1 ZIP_PACKAGE=1 ./production_connector/linux/build-package.sh /path/to/project
+```
+
+Optional:
+
+- second argument: `/path/to/project/production_connector/config.json` to include a real client config
+- third argument: `/path/to/output` to change the delivery folder
+
+This creates:
+
+- `production_connector/release/linux/RupMesProductionConnector/`
+- optionally `production_connector/release/linux/RupMesProductionConnector.tar.gz`
+
+The package already includes:
+
+- bundled executable
+- install and uninstall scripts
+- `state/` and `logs/` folders
+- `config.json` if provided, otherwise `config.template.json`
+
+#### Linux service install
+
 ```bash
 cd /path/to/project
 chmod +x production_connector/linux/install.sh
@@ -171,9 +222,19 @@ chmod +x production_connector/linux/install.sh
 ```
 
 The script:
-- creates `production_connector/.venv`
-- installs the connector extras
+- uses `production_connector/dist/linux/cli/rupmes-connector/rupmes-connector` when available
 - installs a `systemd` unit
+- starts the service automatically
+
+If the bundle is not present, the script falls back to the Python-based mode for development use.
+
+Uninstall:
+
+```bash
+cd /path/to/project
+chmod +x production_connector/linux/uninstall.sh
+./production_connector/linux/uninstall.sh /path/to/project
+```
 
 ## Manual execution
 

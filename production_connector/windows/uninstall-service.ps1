@@ -9,7 +9,7 @@ param(
 $connectorRoot = Join-Path $ProjectRoot "production_connector"
 $defaultBundleRoot = Join-Path $connectorRoot "dist\windows\service"
 $bundleRootPath = if ([string]::IsNullOrWhiteSpace($BundleRoot)) { $defaultBundleRoot } else { $BundleRoot }
-$bundleSettingsPath = Join-Path $bundleRootPath "service.settings.json"
+$bundleSettingsPath = Join-Path (Join-Path $bundleRootPath "rupmes-connector-service") "service.settings.json"
 $windowsRoot = Join-Path $connectorRoot "windows"
 $venvPath = Join-Path $connectorRoot ".venv"
 $pythonVenv = Join-Path $venvPath "Scripts\python.exe"
