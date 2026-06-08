@@ -6,6 +6,7 @@ from rupmes.repositories.items_repository import ItemsRepository
 
 def list_items(
     session: Session,
+    tenant_id: str | None = None,
     limit: int = 100,
     offset: int = 0,
     status_id: str | None = None,
@@ -20,6 +21,7 @@ def list_items(
 ):
     repo = ItemsRepository(session)
     return repo.list_items(
+        tenant_id=tenant_id,
         limit=limit,
         offset=offset,
         status_id=status_id,
@@ -33,9 +35,9 @@ def list_items(
         last_test_date_to=last_test_date_to,
     )
 
-def get_item(session: Session, item_id: str):
+def get_item(session: Session, item_id: str, tenant_id: str | None = None):
     repo = ItemsRepository(session)
-    return repo.get_item(item_id)
+    return repo.get_item(item_id, tenant_id=tenant_id)
 
 
 def create_item(session: Session, item: TbItems):

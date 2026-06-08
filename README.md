@@ -1,33 +1,47 @@
-# RupMes Trazability (Python)
+# RupMes Trazability
 
-This repo provides a Python-driven PostgreSQL schema for a MES trazability database.
+Portal MES con backend FastAPI, frontend React/Vite y esquema PostgreSQL para trazabilidad, maestros, seguridad, reporting e ingestión industrial.
 
-## MVC structure
+## Qué incluye
 
-- Models: `src/rupmes/models/`
-- Controllers: `src/rupmes/controllers/`
-- Views (CLI): `src/rupmes/views/`
-- Core utilities: `src/rupmes/core/`
-- Services: `src/rupmes/services/`
-- Repositories: `src/rupmes/repositories/`
+- Backend API: `src/rupmes/views/`
+- Modelos y esquema SQLAlchemy: `src/rupmes/models/`
+- Migraciones Alembic: `alembic/`
+- Frontend portal: `frontend/`
+- Conector industrial externo: `production_connector/`
 
-## Project layout
+## Estructura
 
-```
+```text
 src/rupmes/
-  core/           # Config and DB session helpers
-  models/         # SQLAlchemy models (tables)
-  repositories/   # Data access layer
-  controllers/    # Business logic
-  services/       # Cross-cutting services (security)
-  views/          # CLI and API entrypoints
-tests/            # Pytest suite
-alembic/          # Migration scripts
+  core/           # Configuración, DB y utilidades base
+  models/         # Modelos SQLAlchemy
+  repositories/   # Acceso a datos
+  controllers/    # Lógica de negocio
+  services/       # Seguridad y servicios transversales
+  views/          # API y CLI
+frontend/         # Portal React/Vite
+alembic/          # Migraciones
+production_connector/  # Conector SQL/MQTT/OPC UA
 ```
 
-## Quick start
+## Antes de arrancar
 
-1) Create and activate a virtual environment, then install dependencies:
+Hay 3 preguntas que decidir primero:
+
+1. ¿Vas a usar Python + Vite en local o Docker?
+2. ¿La base de datos es interna del `docker compose` o externa?
+3. ¿La base externa ya tiene estructura y datos base, o está vacía?
+
+Según eso, usa uno de estos escenarios.
+
+## Escenario 1: desarrollo local sin Docker
+
+Úsalo si quieres trabajar con backend y frontend en modo desarrollo.
+
+### Backend
+
+1. Crea y activa entorno virtual:
 
 ```bash
 python -m venv .venv
@@ -35,349 +49,384 @@ python -m venv .venv
 pip install -e .
 ```
 
-2) Set your connection string:
+2. Define `DATABASE_URL`:
 
 ```bash
 set DATABASE_URL=postgresql+psycopg2://USER:PASS@localhost:5432/mes_db
 ```
 
-3) Create tables and seed defaults:
+3. Si la base está vacía, crea estructura y datos base:
 
 ```bash
+alembic upgrade head
 python -m rupmes init-db
 ```
 
-## Frontend (portal)
+4. Arranca la API:
 
-The frontend lives in `frontend/` and uses Vite + React.
+```bash
+uvicorn rupmes.views.api:app --host 0.0.0.0 --port 8011 --reload
+```
 
-Install dependencies:
+### Frontend
+
+1. Instala dependencias:
 
 ```bash
 cd frontend
 npm install
-```
-
-Configure API URL:
-
-```
 copy .env.example .env
 ```
 
-Run dev server:
+2. En `frontend/.env` deja como mínimo:
+
+```env
+VITE_API_URL=http://localhost:8011
+VITE_DEFAULT_LANG=es
+VITE_CSRF_COOKIE_NAME=rupmes_csrf
+```
+
+3. Arranca Vite:
 
 ```bash
 npm run dev
 ```
 
-Open:
-- `http://localhost:5173`
+4. Abre:
 
-Docker (frontend + backend):
+- Portal: `http://localhost:5173`
+- API: `http://localhost:8011`
+- Swagger: `http://localhost:8011/docs`
+
+## Escenario 2: Docker con base interna
+
+Úsalo si quieres levantar todo con `docker compose`, incluida la base PostgreSQL.
+
+### Configuración
+
+1. Copia `.env.example` a `.env`
+2. Ajusta solo lo necesario
+
+Configuración mínima típica:
+
+```env
+POSTGRES_USER=rupmes
+POSTGRES_PASSWORD=rupmes
+POSTGRES_DB=mes_db
+DATABASE_URL=postgresql+psycopg2://rupmes:rupmes@db:5432/mes_db
+
+DB_PORT=5432
+BACKEND_PORT=8011
+FRONTEND_PORT=8080
+PGADMIN_PORT=5050
+
+VITE_API_URL=http://localhost:8011
+FRONTEND_ORIGINS=http://localhost:8080
+
+WAIT_FOR_DB_ON_STARTUP=true
+WAIT_FOR_DB_TIMEOUT=60
+RUN_DB_MIGRATIONS=true
+RUN_DB_SEED=true
+```
+
+### Arranque
 
 ```bash
 docker compose up --build
 ```
 
-Open:
-- API: `http://localhost:8000`
+### URLs
+
 - Portal: `http://localhost:8080`
+- API: `http://localhost:8011`
+- Swagger: `http://localhost:8011/docs`
+- pgAdmin: `http://localhost:5050`
 
-External production connector:
+## Escenario 3: Docker con base externa ya inicializada
 
-- Windows/Linux connector for reading source DB rows and pushing them to `/production-reports/ingest`
-- Docs and install assets: `production_connector/`
+Úsalo si la base PostgreSQL es externa y ya tiene:
 
-## CLI
+- estructura creada
+- migraciones aplicadas
+- datos base necesarios
 
-- Initialize DB: `python -m rupmes init-db`
+### Configuración
 
-## API (FastAPI)
+Ejemplo:
 
-Start the API:
+```env
+DATABASE_URL=postgresql+psycopg2://rupmes_user:password@dbserver:5432/mes_db
 
-```bash
-uvicorn rupmes.views.api:app --reload
+BACKEND_PORT=8011
+FRONTEND_PORT=8080
+PGADMIN_PORT=5050
+
+VITE_API_URL=http://localhost:8011
+FRONTEND_ORIGINS=http://localhost:8080
+
+WAIT_FOR_DB_ON_STARTUP=true
+WAIT_FOR_DB_TIMEOUT=60
+RUN_DB_MIGRATIONS=false
+RUN_DB_SEED=false
 ```
 
-Endpoints:
+### Arranque
+
+```bash
+docker compose up --build app frontend
+```
+
+No hace falta levantar `db`.
+
+## Escenario 4: Docker con base externa vacía o incompleta
+
+Úsalo si la base PostgreSQL es externa, pero RupMes debe crear estructura o datos base.
+
+### Caso A: base vacía
+
+```env
+RUN_DB_MIGRATIONS=true
+RUN_DB_SEED=true
+```
+
+### Caso B: estructura creada pero faltan datos base
+
+```env
+RUN_DB_MIGRATIONS=false
+RUN_DB_SEED=true
+```
+
+### Caso C: estructura creada, datos creados, pero quieres que RupMes gestione futuras migraciones
+
+```env
+RUN_DB_MIGRATIONS=true
+RUN_DB_SEED=false
+```
+
+### Arranque
+
+```bash
+docker compose up --build app frontend
+```
+
+## Qué significan las variables importantes
+
+### Base de datos
+
+- `DATABASE_URL`: cadena real de conexión usada por la aplicación
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`: útiles sobre todo para la base interna Docker
+- `DB_PORT`: puerto publicado de PostgreSQL cuando usas la base interna
+
+### API y portal
+
+- `BACKEND_PORT`: puerto HTTP del backend FastAPI
+- `FRONTEND_PORT`: puerto HTTP del portal
+- `PGADMIN_PORT`: puerto HTTP de pgAdmin
+- `VITE_API_URL`: URL del backend que se incrusta en el build del frontend
+
+Importante:
+
+- `VITE_API_URL` se aplica al compilar el frontend
+- si la cambias, debes reconstruir el contenedor frontend
+
+### Arranque automático
+
+- `WAIT_FOR_DB_ON_STARTUP`: espera a que la BD responda antes de arrancar
+- `WAIT_FOR_DB_TIMEOUT`: tiempo máximo de espera
+- `RUN_DB_MIGRATIONS`: ejecuta `alembic upgrade head`
+- `RUN_DB_SEED`: ejecuta `python -m rupmes init-db`
+
+### Cookies y CORS
+
+- `FRONTEND_ORIGINS`: orígenes permitidos por CORS para el navegador
+- `COOKIE_SECURE`: usa cookies seguras solo para HTTPS
+- `COOKIE_SAMESITE`: política de cookies
+- `SESSION_COOKIE_NAME`: nombre de cookie de sesión
+- `CSRF_COOKIE_NAME`: nombre de cookie CSRF
+
+## Reglas prácticas para evitar errores comunes
+
+### 1. No mezcles hosts distintos en portal y API
+
+Si abres el portal por:
+
+- `http://localhost:8080`
+
+usa también:
+
+```env
+VITE_API_URL=http://localhost:8011
+FRONTEND_ORIGINS=http://localhost:8080
+```
+
+Si prefieres `127.0.0.1`, usa `127.0.0.1` en ambos.
+
+No mezcles:
+
+- portal con `localhost`
+- API con `127.0.0.1`
+
+porque eso suele romper la sesión por cookies.
+
+### 2. Si cambias `VITE_API_URL`, recompila frontend
+
+```bash
+docker compose down
+docker compose build --no-cache frontend
+docker compose up -d app frontend
+```
+
+### 3. Si la base externa usa contraseñas con caracteres especiales
+
+Escápalos en `DATABASE_URL`.
+
+Ejemplo:
+
+```env
+DATABASE_URL=postgresql+psycopg2://user:MyPass%24word@dbserver:5432/mes_db
+```
+
+## Verificación rápida tras arranque
+
+### Backend
+
+Abre:
+
+- `http://localhost:8011/health`
+- `http://localhost:8011/docs`
+
+`GET /` devuelve `404` y es normal. No hay home page HTML en la API.
+
+### Frontend
+
+Abre:
+
+- `http://localhost:8080`
+
+### Login por defecto
+
+Si la base fue inicializada con seed:
+
+- Usuario: `admin`
+- Contraseña: `admin123`
+
+También existe:
+
+- Usuario: `machine`
+- Contraseña: `machine123`
+
+## Datos base que crea el seed
+
+`python -m rupmes init-db` crea o completa:
+
+- tenant `DEFAULT`
+- branding básico
+- estados base
+- grupos
+- roles
+- permisos
+- usuarios `admin` y `machine`
+
+Lógica de seed:
+
+- `src/rupmes/controllers/seed_controller.py`
+
+## API principal
+
+Arranque manual de backend:
+
+```bash
+uvicorn rupmes.views.api:app --host 0.0.0.0 --port 8011 --reload
+```
+
+Endpoints clave:
+
 - `POST /auth/login`
 - `POST /auth/logout`
 - `GET /auth/me`
 - `GET /health`
+- `GET /permissions`
+- `GET /roles`
+- `GET /users`
+- `GET /items`
+- `GET /statuses`
 - `POST /production-reports`
 - `POST /production-reports/ingest`
 - `GET /production-ingest-clients`
-- `GET /production-ingest-clients/{client_id}`
 - `POST /production-ingest-clients`
-- `PATCH /production-ingest-clients/{client_id}`
-- `DELETE /production-ingest-clients/{client_id}`
-- `GET /production-reports/{report_id}`
-- `GET /production-reports/traceability/{serial_number}`
-- `GET /production-reports/analytics/daily-total`
-- `GET /production-reports/analytics/by-line`
-- `GET /production-reports/analytics/ok-nok-by-shift`
-- `GET /production-reports/analytics/ftq-fpy`
-- `GET /production-reports/analytics/top-defects`
-- `GET /production-reports/analytics/average-cycle-time`
-- `GET /statuses`
-- `POST /statuses`
-- `GET /statuses/{status_id}`
-- `PATCH /statuses/{status_id}`
-- `DELETE /statuses/{status_id}`
-- `GET /items`
-- `POST /items`
-- `GET /items/{item_id}`
-- `PATCH /items/{item_id}`
-- `DELETE /items/{item_id}`
-- `GET /users`
-- `POST /users`
-- `GET /users/{id_user}`
-- `PATCH /users/{id_user}`
-- `DELETE /users/{id_user}`
-- `GET /routings`
-- `POST /routings`
-- `GET /routings/{routing_id}`
-- `PATCH /routings/{routing_id}`
-- `DELETE /routings/{routing_id}`
-- `GET /roles`
-- `POST /roles`
-- `PATCH /roles/{role_id}`
-- `DELETE /roles/{role_id}`
-- `GET /roles/{role_id}/permissions`
-- `PUT /roles/{role_id}/permissions`
-- `GET /permissions`
-- `GET /users/{id_user}/roles`
-- `PUT /users/{id_user}/roles`
 
-Example requests:
+## Producción e integraciones industriales
 
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/statuses
-curl -X POST http://localhost:8000/statuses -H "Content-Type: application/json" \
-  -d "{\"status_id\":\"CUSTOM\",\"description_status\":\"Custom status\"}"
-```
+### Tabla principal
 
-## Production reports
+- `production_report`
 
-The project now supports industrial production reporting in a single PostgreSQL database using dimensional fields such as `plant_code`, `line_code`, `station_code`, and `machine_code`. Lines and plants are not split across separate databases.
-
-Main table:
-- `public.production_report`
-
-Main files:
-- ORM model: `src/rupmes/models/tables.py`
-- Repository/controller/API: `src/rupmes/repositories/production_report_repository.py`, `src/rupmes/controllers/production_report_controller.py`, `src/rupmes/views/api.py`
-- Alembic migration: `alembic/versions/b1f302d8a9b1_add_production_report.py`, `alembic/versions/c42d0d7f2a10_add_production_ingest_clients.py`
-- SQL scripts: `Database_Scripts/SQL_create_production_report.sql`, `Database_Scripts/SQL_create_production_report_indexes.sql`, `Database_Scripts/SQL_insert_production_report_samples.sql`, `Database_Scripts/SQL_create_production_ingest_clients.sql`
-
-Validation rules:
-- `result` only accepts `OK`, `NOK`, `SCRAP`, `REWORK`
-- `serial_number` cannot be blank
-- `line_code` is required and cannot be blank
-- `production_datetime` is required
-
-Example insert through API:
-
-```bash
-curl -X POST http://localhost:8000/production-reports \
-  -H "Content-Type: application/json" \
-  -H "X-CSRF-Token: <csrf_cookie_value>" \
-  -d "{\"plant_code\":\"PLANT-ES\",\"line_code\":\"LINE-A\",\"serial_number\":\"SN-000001\",\"result\":\"OK\",\"production_datetime\":\"2026-05-26T06:15:00\",\"cycle_time_seconds\":42.315,\"target_cycle_time_seconds\":45.000,\"source_system\":\"MES\"}"
-```
-
-Recommended machine-to-machine ingestion from production lines:
-
-- Preferred model: create one ingest client per line, station, PLC, SCADA, or MES connector.
-- Each client has its own `client_id` and `api_key`.
-- Authentication is done with headers `X-Client-Id` and `X-API-Key`, so no browser login or CSRF flow is required.
-- Keep `plant_code`, `line_code`, `station_code`, and `machine_code` in the payload to identify origin within the same PostgreSQL database.
-- You can optionally scope each ingest client to a fixed `plant_code`, `line_code`, `station_code`, `machine_code`, or `source_system`. If the payload does not match its scope, the API rejects the insert.
-- `PRODUCTION_INGEST_API_KEY` remains available as a global fallback for backward compatibility, but per-client credentials are the recommended setup.
-
-Create an ingest client as admin:
-
-```bash
-curl -X POST http://localhost:8000/production-ingest-clients \
-  -H "Content-Type: application/json" \
-  -H "X-CSRF-Token: <csrf_cookie_value>" \
-  -d "{\"client_id\":\"LINE-A-PLC\",\"description\":\"PLC linea A\",\"api_key\":\"super-secret-line-a\",\"plant_code\":\"PLANT-ES\",\"line_code\":\"LINE-A\",\"source_system\":\"PLC\",\"is_active\":true}"
-```
-
-Example line ingestion:
-
-```bash
-curl -X POST http://localhost:8000/production-reports/ingest \
-  -H "Content-Type: application/json" \
-  -H "X-Client-Id: LINE-A-PLC" \
-  -H "X-API-Key: super-secret-line-a" \
-  -d "{\"plant_code\":\"PLANT-ES\",\"line_code\":\"LINE-A\",\"station_code\":\"ST-10\",\"machine_code\":\"MC-100\",\"shift_code\":\"M1\",\"serial_number\":\"SN-000001\",\"result\":\"OK\",\"production_datetime\":\"2026-05-26T06:15:00\",\"cycle_time_seconds\":42.315,\"target_cycle_time_seconds\":45.000,\"source_system\":\"PLC\"}"
-```
-
-Production report API contract:
+### Inserción desde portal o backoffice
 
 - `POST /production-reports`
-  - Intended for authenticated portal or backoffice users.
-  - Requires a valid session cookie plus `X-CSRF-Token`.
+- requiere sesión + CSRF
+
+### Inserción máquina a máquina
+
 - `POST /production-reports/ingest`
-  - Intended for PLC, SCADA, MES connectors, industrial gateways, or machine-to-machine integrations.
-  - Requires `X-Client-Id` and `X-API-Key`.
+- requiere `X-Client-Id` y `X-API-Key`
 
-Minimum payload required for inserts:
+### Gestión de credenciales técnicas
 
-```json
-{
-  "line_code": "LINE-A",
-  "serial_number": "SN-000001",
-  "result": "OK",
-  "production_datetime": "2026-05-26T06:15:00"
-}
-```
+Desde el portal:
 
-Recommended payload for useful reporting:
+- `Administración > Integraciones`
 
-```json
-{
-  "plant_code": "PLANT-ES",
-  "line_code": "LINE-A",
-  "station_code": "ST-10",
-  "machine_code": "MC-100",
-  "shift_code": "M1",
-  "production_order": "PO-2026-0001",
-  "product_code": "MODEL-X",
-  "product_family": "FAMILY-A",
-  "customer": "CUSTOMER-1",
-  "serial_number": "SN-000001",
-  "result": "OK",
-  "error_code": null,
-  "error_description": null,
-  "defect_station": null,
-  "production_datetime": "2026-05-26T06:15:00",
-  "cycle_time_seconds": 42.315,
-  "target_cycle_time_seconds": 45.000,
-  "component_serial": "CMP-0001",
-  "component_lot": "LOT-240526",
-  "supplier_code": "SUP-01",
-  "nest_number": 1,
-  "tool_id": "TOOL-10",
-  "program_name": "PROGRAM-A",
-  "software_version": "1.2.3",
-  "is_rework": false,
-  "rework_result": null,
-  "rework_datetime": null,
-  "source_system": "MES"
-}
-```
+Cada cliente de integración puede quedar limitado por:
 
-Fields that matter most for reports:
+- `plant_code`
+- `line_code`
+- `station_code`
+- `machine_code`
+- `source_system`
 
-- `production_datetime`: required for all time-based analytics
-- `line_code`: required for all line-based analytics
-- `serial_number`: required for traceability and FTQ/FPY
-- `result`: required for quality metrics
-- `plant_code`: recommended for plant filtering
-- `shift_code`: recommended for OK/NOK by shift
-- `cycle_time_seconds`: required for average cycle time analytics
-- `error_code` and `error_description`: recommended for top defects
-- `is_rework`: important for FPY logic
-- `station_code` and `machine_code`: recommended for detailed traceability
+Si el payload no coincide con el ámbito del cliente, la API rechaza la inserción.
 
-How fields are used by analytics:
+### Recomendación
 
-- Daily production: `production_datetime`
-- Production by line: `line_code`, `production_datetime`
-- OK/NOK by shift: `shift_code`, `result`
-- FTQ/FPY: `line_code`, `serial_number`, `result`, `production_datetime`, `is_rework`
-- Top defects: `error_code`, `error_description`
-- Average cycle time: `line_code`, `cycle_time_seconds`
-- Serial traceability: `serial_number`, plus ideally `station_code` and `machine_code`
+Crear un cliente distinto por:
 
-Interactive API documentation:
+- línea
+- PLC
+- SCADA
+- gateway
+- conector SQL/MQTT/OPC UA
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+## Conector externo
 
-Usage model:
-- `POST /production-reports/ingest`: for automatic inserts from industrial lines and machines
-- `POST /production-ingest-clients`: for provisioning credentials per line/machine from the admin portal or backoffice
-- `POST /production-reports`: for authenticated portal or backoffice users
-- Analytics endpoints: for reporting and dashboards
+Hay un conector independiente para:
 
-Example analytics calls:
+- SQL
+- MQTT
+- OPC UA
 
-```bash
-curl "http://localhost:8000/production-reports/analytics/daily-total?date_from=2026-05-01&date_to=2026-05-31"
-curl "http://localhost:8000/production-reports/analytics/by-line?date_from=2026-05-01&date_to=2026-05-31&plant_code=PLANT-ES"
-curl "http://localhost:8000/production-reports/analytics/ok-nok-by-shift?date_from=2026-05-26&date_to=2026-05-26&line_code=LINE-A"
-curl "http://localhost:8000/production-reports/analytics/ftq-fpy?date_from=2026-05-26&date_to=2026-05-26"
-curl "http://localhost:8000/production-reports/analytics/top-defects?date_from=2026-05-26&date_to=2026-05-26&limit=10"
-curl "http://localhost:8000/production-reports/traceability/SN-000002"
-curl "http://localhost:8000/production-reports/analytics/average-cycle-time?date_from=2026-05-01&date_to=2026-05-31"
-```
+Documentación:
 
-Metric notes:
-- FTQ: first recorded attempt per serial, line, and day with result `OK`
-- FPY: serials that completed the filtered day and line without any non-`OK` event and without rework
+- `production_connector/README.md`
 
-## Auth (local)
+## Alembic
 
-Defaults (seeded):
-- User `admin` / password `admin123` (role `ADM`)
-- User `machine` / password `machine123` (role `USR`)
-
-Login:
-```bash
-curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" \
-  -d "{\"id_user\":\"admin\",\"password\":\"admin123\"}"
-```
-
-The API sets:
-- `SESSION_COOKIE_NAME` (HttpOnly)
-- `CSRF_COOKIE_NAME` (readable by frontend)
-
-For state-changing requests (POST/PUT/PATCH/DELETE), send:
-- Header: `X-CSRF-Token: <csrf_cookie_value>`
-
-## Auth configuration (.env)
-
-```
-FRONTEND_ORIGINS=http://localhost:5173,http://localhost:3000
-COOKIE_SECURE=false
-COOKIE_SAMESITE=lax
-SESSION_TTL_MINUTES=480
-SESSION_COOKIE_NAME=rupmes_session
-CSRF_COOKIE_NAME=rupmes_csrf
-MULTI_TENANT_ENABLED=false
-DEFAULT_TENANT_ID=DEFAULT
-```
-
-## Tests
-
-Install dev dependencies:
-
-```bash
-pip install -e .[dev]
-```
-
-Run tests:
-
-```bash
-pytest
-```
-
-## Alembic migrations
-
-1) Set `DATABASE_URL` and run:
+Aplicar migraciones:
 
 ```bash
 alembic upgrade head
 ```
 
-If your DB was created with `create_all` (no Alembic history), stamp it first:
+Si la base ya existe pero no tiene historial Alembic:
 
 ```bash
 alembic stamp head
+```
+
+Crear una nueva migración:
+
+```bash
+alembic revision -m "your message" --autogenerate
 ```
 
 Rollback:
@@ -386,13 +435,22 @@ Rollback:
 alembic downgrade -1
 ```
 
-2) To create new migrations after changing models:
+## Tests
+
+Instala dependencias dev:
 
 ```bash
-alembic revision -m "your message" --autogenerate
+pip install -e .[dev]
 ```
 
-## Notes
-- The database schema is defined in `src/rupmes/models/tables.py`.
-- Default data seeding is in `src/rupmes/controllers/seed_controller.py`.
-- SQL scripts in `Database_Scripts/` are legacy; Python is the source of truth.
+Ejecuta:
+
+```bash
+pytest
+```
+
+## Notas
+
+- La fuente de verdad del esquema es `src/rupmes/models/tables.py`
+- Las migraciones viven en `alembic/versions/`
+- Los scripts SQL de `Database_Scripts/` son auxiliares o heredados; no son la referencia principal

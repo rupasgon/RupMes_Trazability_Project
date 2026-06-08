@@ -6,7 +6,9 @@ from rupmes.controllers.production_ingest_clients_controller import get_producti
 from rupmes.controllers.permissions_controller import list_permissions
 from rupmes.controllers.role_permissions_controller import list_role_permissions, replace_role_permissions
 from rupmes.controllers.roles_controller import create_role, delete_role, get_role, list_roles, update_role
+from rupmes.controllers.tenants_controller import list_tenants
 from rupmes.controllers.user_roles_controller import list_user_roles, replace_user_roles
+from rupmes.controllers.user_tenants_controller import list_user_tenants
 from rupmes.controllers.users_controller import get_user
 from rupmes.core.config import (
     get_cookie_samesite,
@@ -72,6 +74,28 @@ def _get_user_permissions(db: Session, id_user: str) -> set[str]:
     return permissions
 
 
+def _is_admin_role(db: Session, id_user: str) -> bool:
+    return "ADM" in _get_user_role_ids(db, id_user)
+
+
+def _get_user_accessible_tenant_ids(db: Session, user) -> list[str]:
+    if _is_admin_role(db, user.id_user):
+        return [row.tenant_id for row in list_tenants(db)]
+    active_tenant_ids = {row.tenant_id for row in list_tenants(db, active_only=True)}
+    tenant_ids = {row.tenant_id for row in list_user_tenants(db, user.id_user)}
+    tenant_ids.add(user.tenant_id)
+    return sorted(tenant_ids & active_tenant_ids)
+
+
+def require_tenant_access(request: Request, user, db: Session) -> str:
+    tenant_id = resolve_tenant_id(request)
+    if _is_admin_role(db, user.id_user):
+        return tenant_id
+    if tenant_id not in _get_user_accessible_tenant_ids(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    return tenant_id
+
+
 def require_admin(request: Request, db: Session = Depends(get_db)):
     user, session_row = _get_current(request, db)
     role_ids = _get_user_role_ids(db, user.id_user)
@@ -131,9 +155,7 @@ def login(payload: LoginRequest, response: Response, request: Request, db: Sessi
     if not user or not authenticate_user(db, user, payload.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    tenant_id = resolve_tenant_id(request)
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    tenant_id = require_tenant_access(request, user, db)
 
     if user.status_user != "ENB":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User disabled")
@@ -168,9 +190,10 @@ def login(payload: LoginRequest, response: Response, request: Request, db: Sessi
         id_user=user.id_user,
         name_user=user.name_user,
         mail_user=user.mail_user,
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         roles=role_ids,
         permissions=permissions,
+        accessible_tenant_ids=_get_user_accessible_tenant_ids(db, user),
     )
 
 
@@ -189,24 +212,24 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 @router.get("/auth/me", response_model=LoginResponse)
 def me(request: Request, db: Session = Depends(get_db)):
     user, _session_row = _get_current(request, db)
+    tenant_id = require_tenant_access(request, user, db)
     role_ids = _get_user_role_ids(db, user.id_user)
     permissions = sorted(_get_user_permissions(db, user.id_user))
     return LoginResponse(
         id_user=user.id_user,
         name_user=user.name_user,
         mail_user=user.mail_user,
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         roles=role_ids,
         permissions=permissions,
+        accessible_tenant_ids=_get_user_accessible_tenant_ids(db, user),
     )
 
 
 @router.get("/roles", response_model=list[RoleRead])
 def get_roles(request: Request, db: Session = Depends(get_db), _perm=Depends(require_permission("roles.read"))):
     user, _session_row = _perm
-    tenant_id = resolve_tenant_id(request)
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    tenant_id = require_tenant_access(request, user, db)
     rows = list_roles(db, tenant_id=tenant_id)
     return [
         RoleRead(role_id=row.role_id, description_role=row.description_role, tenant_id=row.tenant_id)
@@ -218,9 +241,7 @@ def get_roles(request: Request, db: Session = Depends(get_db), _perm=Depends(req
 def create_role_endpoint(payload: RoleCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("roles.write"))):
     user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    tenant_id = require_tenant_access(request, user, db)
     role = TbRoles(
         role_id=payload.role_id,
         description_role=payload.description_role,
@@ -238,11 +259,11 @@ def create_role_endpoint(payload: RoleCreate, request: Request, db: Session = De
 def update_role_endpoint(role_id: str, payload: RoleUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("roles.write"))):
     user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, user, db)
     role = get_role(db, role_id)
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    if role.tenant_id != tenant_id or user.tenant_id != tenant_id:
+    if role.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     if payload.description_role is not None:
         role.description_role = payload.description_role
@@ -258,11 +279,11 @@ def update_role_endpoint(role_id: str, payload: RoleUpdate, request: Request, db
 def delete_role_endpoint(role_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("roles.write"))):
     user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, user, db)
     role = get_role(db, role_id)
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    if role.tenant_id != tenant_id or user.tenant_id != tenant_id:
+    if role.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     delete_role(db, role)
     return None
@@ -271,9 +292,7 @@ def delete_role_endpoint(role_id: str, request: Request, db: Session = Depends(g
 @router.get("/permissions", response_model=list[PermissionRead])
 def get_permissions(request: Request, db: Session = Depends(get_db), _perm=Depends(require_permission("roles.read"))):
     user, _session_row = _perm
-    tenant_id = resolve_tenant_id(request)
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    require_tenant_access(request, user, db)
     rows = list_permissions(db)
     return [
         PermissionRead(permission_id=row.permission_id, description_permission=row.description_permission)
@@ -284,11 +303,11 @@ def get_permissions(request: Request, db: Session = Depends(get_db), _perm=Depen
 @router.get("/roles/{role_id}/permissions", response_model=list[str])
 def get_role_permissions(role_id: str, request: Request, db: Session = Depends(get_db), _perm=Depends(require_permission("roles.read"))):
     user, _session_row = _perm
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, user, db)
     role = get_role(db, role_id)
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    if role.tenant_id != tenant_id or user.tenant_id != tenant_id:
+    if role.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     rows = list_role_permissions(db, role_id)
     return [row.permission_id for row in rows]
@@ -304,11 +323,11 @@ def update_role_permissions(
 ):
     user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, user, db)
     role = get_role(db, role_id)
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    if role.tenant_id != tenant_id or user.tenant_id != tenant_id:
+    if role.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     permission_ids = {row.permission_id for row in list_permissions(db)}
     unknown = [pid for pid in payload.permission_ids if pid not in permission_ids]
@@ -321,11 +340,11 @@ def update_role_permissions(
 @router.get("/users/{id_user}/roles", response_model=list[str])
 def get_user_roles(id_user: str, request: Request, db: Session = Depends(get_db), _perm=Depends(require_permission("users.read")), _admin=Depends(require_admin)):
     user, _session_row = _perm
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, user, db)
     target_user = get_user(db, id_user)
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if target_user.tenant_id != tenant_id or user.tenant_id != tenant_id:
+    if tenant_id not in _get_user_accessible_tenant_ids(db, target_user) and not _is_admin_role(db, target_user.id_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     rows = list_user_roles(db, id_user)
     return [row.role_id for row in rows]
@@ -342,11 +361,11 @@ def update_user_roles(
 ):
     user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, user, db)
     target_user = get_user(db, id_user)
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if target_user.tenant_id != tenant_id or user.tenant_id != tenant_id:
+    if tenant_id not in _get_user_accessible_tenant_ids(db, target_user) and not _is_admin_role(db, target_user.id_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     role_ids = {row.role_id for row in list_roles(db, tenant_id=tenant_id)}
     unknown = [rid for rid in payload.role_ids if rid not in role_ids]

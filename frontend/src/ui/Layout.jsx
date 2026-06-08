@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { request } from "../api.js";
 
 const MASTER_ROUTES = ["lines", "cells", "models", "statuses"];
-const ADMIN_ROUTES = ["users", "roles"];
+const ADMIN_ROUTES = ["users", "roles", "integrations"];
 
 function NavGroup({ collapsed, label, isOpen, onToggle, children }) {
   if (collapsed) {
@@ -25,10 +25,13 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
   const permissions = auth.permissions || [];
   const isAdmin = auth.roles?.includes("ADM");
   const canAdmin = permissions.includes("users.read");
+  const canProductionAdmin = permissions.includes("production.admin");
   const canItems = permissions.includes("items.read");
   const canReports = permissions.includes("production.read");
   const canMasters = permissions.includes("masters.read");
   const currentTenant = tenantId || auth.tenant_id || "DEFAULT";
+  const accessibleTenantIds = auth.accessible_tenant_ids || (auth.tenant_id ? [auth.tenant_id] : []);
+  const canSwitchTenant = isAdmin || accessibleTenantIds.length > 1;
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("rupmes_sidebar") === "collapsed");
   const [branding, setBranding] = useState({ portal_title: "RupMes", logo_image: null });
   const [tenants, setTenants] = useState([]);
@@ -71,11 +74,6 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
   }, [currentTenant, auth.tenant_id]);
 
   useEffect(() => {
-    if (!isAdmin) {
-      setTenants([]);
-      return;
-    }
-
     const loadTenants = async () => {
       try {
         const data = await request("/tenants", { tenantId: currentTenant });
@@ -86,7 +84,7 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
     };
 
     loadTenants().catch(() => {});
-  }, [isAdmin, currentTenant]);
+  }, [currentTenant, auth.id_user]);
 
   return (
     <div className={`app-shell ${collapsed ? "collapsed" : ""}`}>
@@ -165,7 +163,7 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
             </div>
           ) : null}
 
-          {canAdmin ? (
+          {canAdmin || canProductionAdmin ? (
             <div className="nav-section">
               <NavGroup
                 collapsed={collapsed}
@@ -173,14 +171,24 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
                 isOpen={openGroups.admin}
                 onToggle={() => setOpenGroups((current) => ({ ...current, admin: !current.admin }))}
               >
-                <Link className={`nav-link sub-link ${active === "users" ? "active" : ""}`} to="/users" title={t("users.title")}>
-                  <span className="nav-icon">US</span>
-                  <span className="nav-text">{t("users.title")}</span>
-                </Link>
-                <Link className={`nav-link sub-link ${active === "roles" ? "active" : ""}`} to="/roles" title={t("roles.title")}>
-                  <span className="nav-icon">RL</span>
-                  <span className="nav-text">{t("roles.title")}</span>
-                </Link>
+                {canAdmin ? (
+                  <Link className={`nav-link sub-link ${active === "users" ? "active" : ""}`} to="/users" title={t("users.title")}>
+                    <span className="nav-icon">US</span>
+                    <span className="nav-text">{t("users.title")}</span>
+                  </Link>
+                ) : null}
+                {canAdmin ? (
+                  <Link className={`nav-link sub-link ${active === "roles" ? "active" : ""}`} to="/roles" title={t("roles.title")}>
+                    <span className="nav-icon">RL</span>
+                    <span className="nav-text">{t("roles.title")}</span>
+                  </Link>
+                ) : null}
+                {canProductionAdmin ? (
+                  <Link className={`nav-link sub-link ${active === "integrations" ? "active" : ""}`} to="/integrations" title={t("integrations.title")}>
+                    <span className="nav-icon">IG</span>
+                    <span className="nav-text">{t("integrations.title")}</span>
+                  </Link>
+                ) : null}
               </NavGroup>
             </div>
           ) : null}
@@ -207,7 +215,7 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
                 </div>
               </div>
               <div className="sidebar-meta-grid">
-                {isAdmin ? (
+                {canSwitchTenant ? (
                   <div className="sidebar-meta-item">
                     <span className="muted">{t("nav.activeTenant")}</span>
                     <select
@@ -218,11 +226,13 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
                       {!tenants.some((tenant) => tenant.tenant_id === currentTenant) ? (
                         <option value={currentTenant}>{currentTenant}</option>
                       ) : null}
-                      {tenants.filter((tenant) => tenant.is_active).map((tenant) => (
+                      {tenants
+                        .filter((tenant) => tenant.is_active && (isAdmin || accessibleTenantIds.includes(tenant.tenant_id)))
+                        .map((tenant) => (
                         <option key={tenant.tenant_id} value={tenant.tenant_id}>
                           {tenant.tenant_id}
                         </option>
-                      ))}
+                        ))}
                     </select>
                   </div>
                 ) : null}

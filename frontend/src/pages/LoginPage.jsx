@@ -6,9 +6,29 @@ export default function LoginPage({ onLogin, tenantId, setTenantId, t, lang, set
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [branding, setBranding] = useState({ portal_title: "RupMes", logo_image: null });
+  const [loginContext, setLoginContext] = useState({ multi_tenant_enabled: false, default_tenant_id: "DEFAULT", tenants: [] });
 
   useEffect(() => {
-    const targetTenant = tenantId || "DEFAULT";
+    const loadLoginContext = async () => {
+      try {
+        const data = await request("/public/login-context");
+        setLoginContext(data);
+        if (!tenantId && data.default_tenant_id) {
+          setTenantId(data.default_tenant_id);
+        }
+      } catch {
+        setLoginContext({ multi_tenant_enabled: false, default_tenant_id: "DEFAULT", tenants: [] });
+        if (!tenantId) {
+          setTenantId("DEFAULT");
+        }
+      }
+    };
+
+    loadLoginContext().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const targetTenant = tenantId || loginContext.default_tenant_id || "DEFAULT";
     const loadBranding = async () => {
       try {
         const data = await request("/portal-settings", { tenantId: targetTenant });
@@ -26,7 +46,7 @@ export default function LoginPage({ onLogin, tenantId, setTenantId, t, lang, set
 
     window.addEventListener("rupmes-branding-changed", handleBrandingChanged);
     return () => window.removeEventListener("rupmes-branding-changed", handleBrandingChanged);
-  }, [tenantId]);
+  }, [tenantId, loginContext.default_tenant_id]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -73,11 +93,17 @@ export default function LoginPage({ onLogin, tenantId, setTenantId, t, lang, set
           </div>
           <div className="field">
             <label>{t("login.tenant")}</label>
-            <input
-              value={tenantId}
-              onChange={(event) => setTenantId(event.target.value)}
-              placeholder="DEFAULT"
-            />
+            {loginContext.multi_tenant_enabled ? (
+              <select value={tenantId || loginContext.default_tenant_id || "DEFAULT"} onChange={(event) => setTenantId(event.target.value)}>
+                {loginContext.tenants.map((tenant) => (
+                  <option key={tenant.tenant_id} value={tenant.tenant_id}>
+                    {tenant.name_tenant} ({tenant.tenant_id}){tenant.is_default ? ` - ${t("tenants.default")}` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input value={tenantId || loginContext.default_tenant_id || "DEFAULT"} disabled />
+            )}
           </div>
           <div className="field">
             <label>{t("language.label")}</label>

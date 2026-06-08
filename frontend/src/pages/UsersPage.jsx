@@ -9,6 +9,7 @@ const emptyUser = {
   id_group: "USR",
   status_user: "ENB",
   password: "",
+  accessible_tenant_ids: [],
 };
 
 const emptyProfile = {
@@ -32,6 +33,7 @@ const emptyTenant = {
   tenant_id: "",
   name_tenant: "",
   is_active: true,
+  is_default: false,
 };
 
 const emptyBranding = {
@@ -150,7 +152,7 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
   };
 
   const openCreateUser = () => {
-    setUserForm(emptyUser);
+    setUserForm({ ...emptyUser, accessible_tenant_ids: [currentTenant] });
     setSelectedRoles(["USR"]);
     setStatus("");
     setView("create-user");
@@ -178,6 +180,7 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
       id_group: user.id_group,
       status_user: user.status_user,
       password: "",
+      accessible_tenant_ids: user.accessible_tenant_ids || [],
     });
     setStatus("");
     setView("edit-user");
@@ -225,6 +228,7 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
       tenant_id: tenant.tenant_id,
       name_tenant: tenant.name_tenant,
       is_active: tenant.is_active,
+      is_default: tenant.is_default,
     });
     setStatus("");
     setView("edit-tenant");
@@ -262,6 +266,7 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
         id_group: userForm.id_group,
         status_user: userForm.status_user,
         password: userForm.password || undefined,
+        accessible_tenant_ids: userForm.accessible_tenant_ids,
       };
       await request(`/users/${selectedUser.id_user}`, {
         method: "PATCH",
@@ -406,6 +411,7 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
         data: {
           name_tenant: tenantForm.name_tenant,
           is_active: tenantForm.is_active,
+          is_default: tenantForm.is_default,
         },
         tenantId: currentTenant,
         csrfToken,
@@ -593,6 +599,7 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
                 <th>{t("common.id")}</th>
                 <th>{t("common.name")}</th>
                 <th>{t("common.status")}</th>
+                <th>{t("tenants.default")}</th>
               </tr>
             </thead>
             <tbody>
@@ -605,6 +612,7 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
                       {tenant.is_active ? "ACTIVE" : "INACTIVE"}
                     </span>
                   </td>
+                  <td>{tenant.is_default ? t("common.yes") : t("common.no")}</td>
                 </tr>
               ))}
             </tbody>
@@ -709,6 +717,29 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
                   <input type="password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} required />
                 </div>
               </div>
+              <div className="checkbox-panel">
+                <div className="muted">{t("users.allowedTenants")}</div>
+                <div className="checkbox-list">
+                  {tenants.filter((tenant) => tenant.is_active).map((tenant) => (
+                    <label key={tenant.tenant_id} className="checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={(userForm.accessible_tenant_ids || []).includes(tenant.tenant_id)}
+                        onChange={(event) => {
+                          const current = userForm.accessible_tenant_ids || [];
+                          setUserForm({
+                            ...userForm,
+                            accessible_tenant_ids: event.target.checked
+                              ? [...current, tenant.tenant_id]
+                              : current.filter((entry) => entry !== tenant.tenant_id),
+                          });
+                        }}
+                      />
+                      {tenant.tenant_id} - {tenant.name_tenant}
+                    </label>
+                  ))}
+                </div>
+              </div>
               <div className="editor-actions compact-end">
                 <button className="primary" type="submit" disabled={!canWrite || loading}>{t("common.create")}</button>
               </div>
@@ -755,6 +786,29 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
                 <div className="field">
                   <label>{t("fields.passwordOptional")}</label>
                   <input type="password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
+                </div>
+              </div>
+              <div className="checkbox-panel">
+                <div className="muted">{t("users.allowedTenants")}</div>
+                <div className="checkbox-list">
+                  {tenants.filter((tenant) => tenant.is_active).map((tenant) => (
+                    <label key={tenant.tenant_id} className="checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={(userForm.accessible_tenant_ids || []).includes(tenant.tenant_id)}
+                        onChange={(event) => {
+                          const current = userForm.accessible_tenant_ids || [];
+                          setUserForm({
+                            ...userForm,
+                            accessible_tenant_ids: event.target.checked
+                              ? [...current, tenant.tenant_id]
+                              : current.filter((entry) => entry !== tenant.tenant_id),
+                          });
+                        }}
+                      />
+                      {tenant.tenant_id} - {tenant.name_tenant}
+                    </label>
+                  ))}
                 </div>
               </div>
               <div className="checkbox-panel">
@@ -885,6 +939,10 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
                   <input type="checkbox" checked={tenantForm.is_active} onChange={(event) => setTenantForm({ ...tenantForm, is_active: event.target.checked })} />
                   {t("tenants.active")}
                 </label>
+                <label className="checkbox-item inline-check">
+                  <input type="checkbox" checked={tenantForm.is_default} onChange={(event) => setTenantForm({ ...tenantForm, is_default: event.target.checked })} />
+                  {t("tenants.default")}
+                </label>
               </div>
               <div className="editor-actions compact-end">
                 <button className="primary" type="submit" disabled={loading}>{t("common.create")}</button>
@@ -910,6 +968,10 @@ export default function UsersPage({ auth, onLogout, tenantId, setTenantId, csrfT
                 <label className="checkbox-item inline-check">
                   <input type="checkbox" checked={tenantForm.is_active} onChange={(event) => setTenantForm({ ...tenantForm, is_active: event.target.checked })} />
                   {t("tenants.active")}
+                </label>
+                <label className="checkbox-item inline-check">
+                  <input type="checkbox" checked={tenantForm.is_default} onChange={(event) => setTenantForm({ ...tenantForm, is_default: event.target.checked })} />
+                  {t("tenants.default")}
                 </label>
               </div>
               <div className="editor-actions compact-end">

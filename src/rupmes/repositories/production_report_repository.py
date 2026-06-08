@@ -15,16 +15,19 @@ class ProductionReportRepository(BaseRepository):
         stmt = select(ProductionReport).where(ProductionReport.id == report_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
-    def get_traceability(self, serial_number: str) -> list[ProductionReport]:
+    def get_traceability(self, serial_number: str, tenant_id: str | None = None) -> list[ProductionReport]:
         stmt = (
             select(ProductionReport)
             .where(ProductionReport.serial_number == serial_number)
             .order_by(ProductionReport.production_datetime.asc(), ProductionReport.id.asc())
         )
+        if tenant_id:
+            stmt = stmt.where(ProductionReport.tenant_id == tenant_id)
         return list(self.session.execute(stmt).scalars().all())
 
     def daily_totals(
         self,
+        tenant_id: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         plant_code: str | None = None,
@@ -32,12 +35,13 @@ class ProductionReportRepository(BaseRepository):
     ):
         day_expr = func.date(ProductionReport.production_datetime)
         stmt = select(day_expr.label("production_day"), func.count().label("total_production"))
-        stmt = self._apply_filters(stmt, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
+        stmt = self._apply_filters(stmt, tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
         stmt = stmt.group_by(day_expr).order_by(day_expr.asc())
         return self.session.execute(stmt).all()
 
     def production_by_line(
         self,
+        tenant_id: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         plant_code: str | None = None,
@@ -46,12 +50,13 @@ class ProductionReportRepository(BaseRepository):
             ProductionReport.line_code,
             func.count().label("total_production"),
         )
-        stmt = self._apply_filters(stmt, date_from=date_from, date_to=date_to, plant_code=plant_code)
+        stmt = self._apply_filters(stmt, tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code)
         stmt = stmt.group_by(ProductionReport.line_code).order_by(ProductionReport.line_code.asc())
         return self.session.execute(stmt).all()
 
     def ok_nok_by_shift(
         self,
+        tenant_id: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         plant_code: str | None = None,
@@ -64,12 +69,13 @@ class ProductionReportRepository(BaseRepository):
             func.sum(case((ProductionReport.result == "SCRAP", 1), else_=0)).label("scrap_count"),
             func.sum(case((ProductionReport.result == "REWORK", 1), else_=0)).label("rework_count"),
         )
-        stmt = self._apply_filters(stmt, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
+        stmt = self._apply_filters(stmt, tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
         stmt = stmt.group_by(ProductionReport.shift_code).order_by(ProductionReport.shift_code.asc())
         return self.session.execute(stmt).all()
 
     def ftq_fpy_by_line_and_day(
         self,
+        tenant_id: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         plant_code: str | None = None,
@@ -84,7 +90,7 @@ class ProductionReportRepository(BaseRepository):
             ProductionReport.is_rework,
             ProductionReport.production_datetime,
         )
-        base_stmt = self._apply_filters(base_stmt, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
+        base_stmt = self._apply_filters(base_stmt, tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
         base_subq = base_stmt.subquery()
 
         first_pass = (
@@ -168,6 +174,7 @@ class ProductionReportRepository(BaseRepository):
 
     def top_defects(
         self,
+        tenant_id: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         plant_code: str | None = None,
@@ -179,7 +186,7 @@ class ProductionReportRepository(BaseRepository):
             ProductionReport.error_description,
             func.count().label("defect_count"),
         ).where(ProductionReport.error_code.is_not(None), ProductionReport.error_code != "")
-        stmt = self._apply_filters(stmt, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
+        stmt = self._apply_filters(stmt, tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code)
         stmt = (
             stmt.group_by(ProductionReport.error_code, ProductionReport.error_description)
             .order_by(func.count().desc(), ProductionReport.error_code.asc())
@@ -189,6 +196,7 @@ class ProductionReportRepository(BaseRepository):
 
     def average_cycle_time_by_line(
         self,
+        tenant_id: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         plant_code: str | None = None,
@@ -198,7 +206,7 @@ class ProductionReportRepository(BaseRepository):
             func.avg(ProductionReport.cycle_time_seconds).label("average_cycle_time_seconds"),
             func.count(ProductionReport.cycle_time_seconds).label("sample_count"),
         ).where(ProductionReport.cycle_time_seconds.is_not(None))
-        stmt = self._apply_filters(stmt, date_from=date_from, date_to=date_to, plant_code=plant_code)
+        stmt = self._apply_filters(stmt, tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code)
         stmt = stmt.group_by(ProductionReport.line_code).order_by(ProductionReport.line_code.asc())
         return self.session.execute(stmt).all()
 
@@ -206,11 +214,14 @@ class ProductionReportRepository(BaseRepository):
         self,
         stmt,
         *,
+        tenant_id: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         plant_code: str | None = None,
         line_code: str | None = None,
     ):
+        if tenant_id:
+            stmt = stmt.where(ProductionReport.tenant_id == tenant_id)
         if date_from is not None:
             stmt = stmt.where(ProductionReport.production_datetime >= date_from)
         if date_to is not None:

@@ -68,6 +68,7 @@ class UserCreate(BaseModel):
     id_group: str = Field(..., max_length=10)
     status_user: str = Field(..., max_length=3)
     password: str = Field(..., min_length=6)
+    accessible_tenant_ids: list[str] = []
 
 
 class UserRead(BaseModel):
@@ -77,6 +78,7 @@ class UserRead(BaseModel):
     id_group: str
     status_user: str
     role_ids: list[str] = []
+    accessible_tenant_ids: list[str] = []
     create_date: datetime
 
 
@@ -116,6 +118,7 @@ class UserUpdate(BaseModel):
     id_group: Optional[str] = Field(None, max_length=10)
     status_user: Optional[str] = Field(None, max_length=3)
     password: Optional[str] = Field(None, min_length=6)
+    accessible_tenant_ids: Optional[list[str]] = None
 
 
 class UserSelfUpdate(BaseModel):
@@ -185,6 +188,7 @@ class LoginResponse(BaseModel):
     tenant_id: str
     roles: list[str]
     permissions: list[str]
+    accessible_tenant_ids: list[str] = []
 
 
 class RoleCreate(BaseModel):
@@ -231,6 +235,7 @@ class TenantRead(BaseModel):
     tenant_id: str
     name_tenant: str
     is_active: bool
+    is_default: bool
     create_date: datetime
 
 
@@ -238,6 +243,7 @@ class TenantCreate(BaseModel):
     tenant_id: str = Field(..., max_length=50)
     name_tenant: str = Field(..., max_length=100)
     is_active: bool = True
+    is_default: bool = False
 
     @field_validator("tenant_id", "name_tenant")
     @classmethod
@@ -251,6 +257,7 @@ class TenantCreate(BaseModel):
 class TenantUpdate(BaseModel):
     name_tenant: Optional[str] = Field(None, max_length=100)
     is_active: Optional[bool] = None
+    is_default: Optional[bool] = None
 
     @field_validator("name_tenant")
     @classmethod
@@ -280,6 +287,12 @@ class PortalSettingsUpdate(BaseModel):
         if not cleaned:
             raise ValueError("Value cannot be empty")
         return cleaned
+
+
+class LoginContextRead(BaseModel):
+    multi_tenant_enabled: bool
+    default_tenant_id: str
+    tenants: list[TenantRead]
 
 
 class UserStatusCatalogRead(BaseModel):

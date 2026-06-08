@@ -1,6 +1,6 @@
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
-from rupmes.models import TbUsers
+from rupmes.models import TbUsers, TbUserTenants
 from .base import BaseRepository
 
 
@@ -10,7 +10,11 @@ class UsersRepository(BaseRepository):
     ) -> list[TbUsers]:
         stmt = select(TbUsers)
         if tenant_id:
-            stmt = stmt.where(TbUsers.tenant_id == tenant_id)
+            stmt = (
+                stmt.outerjoin(TbUserTenants, TbUserTenants.id_user == TbUsers.id_user)
+                .where(or_(TbUsers.tenant_id == tenant_id, TbUserTenants.tenant_id == tenant_id))
+                .distinct()
+            )
         stmt = stmt.limit(limit).offset(offset)
         return list(self.session.execute(stmt).scalars().all())
 

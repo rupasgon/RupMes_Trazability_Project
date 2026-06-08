@@ -11,6 +11,7 @@ from rupmes.models import (
     TbTenants,
     TbUserRoles,
     TbUserStatus,
+    TbUserTenants,
     TbUsers,
 )
 from rupmes.services.security import hash_password
@@ -98,7 +99,7 @@ def seed_defaults(engine) -> None:
     with Session(engine) as session:
         if not _has_any_rows(session, TbTenants):
             tenant_id, name_tenant = DEFAULT_TENANT
-            session.add(TbTenants(tenant_id=tenant_id, name_tenant=name_tenant))
+            session.add(TbTenants(tenant_id=tenant_id, name_tenant=name_tenant, is_default=True))
 
         if not _has_any_rows(session, TbPortalSettings):
             tenant_id, name_tenant = DEFAULT_TENANT
@@ -172,5 +173,13 @@ def seed_defaults(engine) -> None:
         for id_user, role_id in [("admin", "ADM"), ("machine", "USR")]:
             if (id_user, role_id) not in existing_user_roles:
                 session.add(TbUserRoles(id_user=id_user, role_id=role_id))
+
+        existing_user_tenants = {
+            (row[0], row[1])
+            for row in session.execute(select(TbUserTenants.id_user, TbUserTenants.tenant_id)).all()
+        }
+        for id_user, tenant_id in [("admin", "DEFAULT"), ("machine", "DEFAULT")]:
+            if (id_user, tenant_id) not in existing_user_tenants:
+                session.add(TbUserTenants(id_user=id_user, tenant_id=tenant_id))
 
         session.commit()

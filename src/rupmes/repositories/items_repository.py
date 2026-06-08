@@ -7,6 +7,7 @@ from .base import BaseRepository
 class ItemsRepository(BaseRepository):
     def list_items(
         self,
+        tenant_id: str | None = None,
         limit: int = 100,
         offset: int = 0,
         status_id: str | None = None,
@@ -20,6 +21,8 @@ class ItemsRepository(BaseRepository):
         last_test_date_to=None,
     ) -> list[TbItems]:
         stmt = select(TbItems)
+        if tenant_id:
+            stmt = stmt.where(TbItems.tenant_id == tenant_id)
         if status_id:
             stmt = stmt.where(TbItems.status_id == status_id)
         if line_id:
@@ -41,8 +44,10 @@ class ItemsRepository(BaseRepository):
         stmt = stmt.limit(limit).offset(offset)
         return list(self.session.execute(stmt).scalars().all())
 
-    def get_item(self, item_id: str) -> TbItems | None:
+    def get_item(self, item_id: str, tenant_id: str | None = None) -> TbItems | None:
         stmt = select(TbItems).where(TbItems.item_id == item_id)
+        if tenant_id:
+            stmt = stmt.where(TbItems.tenant_id == tenant_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
     def create_item(self, item: TbItems) -> TbItems:

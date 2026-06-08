@@ -4,13 +4,13 @@ from rupmes.models import TbRoutings
 from rupmes.repositories.routings_repository import RoutingsRepository
 
 
-def list_routings(session: Session, limit: int = 100, offset: int = 0):
+def list_routings(session: Session, limit: int = 100, offset: int = 0, tenant_id: str | None = None):
     repo = RoutingsRepository(session)
-    return repo.list_routings(limit=limit, offset=offset)
+    return repo.list_routings(limit=limit, offset=offset, tenant_id=tenant_id)
 
-def get_routing(session: Session, routing_id: str):
+def get_routing(session: Session, routing_id: str, tenant_id: str | None = None):
     repo = RoutingsRepository(session)
-    return repo.get_routing(routing_id)
+    return repo.get_routing(routing_id, tenant_id=tenant_id)
 
 
 def create_routing(session: Session, routing: TbRoutings):

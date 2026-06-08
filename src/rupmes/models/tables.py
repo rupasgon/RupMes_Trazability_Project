@@ -27,6 +27,7 @@ class TbLines(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     line_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_line: Mapped[str] = mapped_column(String(50), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
     create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
@@ -37,6 +38,7 @@ class TbTenants(Base):
     tenant_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name_tenant: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"), nullable=False)
     create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
@@ -110,6 +112,20 @@ class TbUserRoles(Base):
     )
 
 
+class TbUserTenants(Base):
+    __tablename__ = "tb_user_tenants"
+
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    id_user: Mapped[str] = mapped_column(String(50), ForeignKey("tb_users.id_user"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("id_user", "tenant_id", name="uq_user_tenant"),
+        Index("ix_tb_user_tenants_id_user", "id_user"),
+        Index("ix_tb_user_tenants_tenant_id", "tenant_id"),
+    )
+
+
 class TbSessions(Base):
     __tablename__ = "tb_sessions"
 
@@ -135,6 +151,7 @@ class TbCells(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     cell_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_cell: Mapped[str] = mapped_column(String(50), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
     create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
@@ -144,6 +161,7 @@ class TbRoutings(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     routing_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_routing: Mapped[str] = mapped_column(String(50), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
     create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
@@ -153,6 +171,7 @@ class TbModels(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     model_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_model: Mapped[str] = mapped_column(String(50), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
     create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
@@ -162,6 +181,7 @@ class TbStatus(Base):
     id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     status_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description_status: Mapped[str] = mapped_column(String(50), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
 
 
 class TbGroups(Base):
@@ -225,6 +245,7 @@ class TbItems(Base):
     value3_str: Mapped[str | None] = mapped_column(String(50))
     value4_str: Mapped[str | None] = mapped_column(String(50))
     value5_str: Mapped[str | None] = mapped_column(String(50))
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
 
     __table_args__ = (
         Index("ix_tb_items_model_id", "model_id"),
@@ -345,6 +366,7 @@ class ProductionReport(Base):
     rework_datetime: Mapped[datetime | None] = mapped_column(DateTime)
     source_system: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
 
     __table_args__ = (
         CheckConstraint("result IN ('OK', 'NOK', 'SCRAP', 'REWORK')", name="ck_production_report_result"),
@@ -376,6 +398,7 @@ class ProductionIngestClient(Base):
     source_system: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
 
     __table_args__ = (
         CheckConstraint("trim(client_id) <> ''", name="ck_production_ingest_clients_client_id_not_blank"),

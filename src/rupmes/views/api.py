@@ -64,7 +64,7 @@ from rupmes.controllers.routings_controller import (
     update_routing,
 )
 from rupmes.controllers.status_controller import create_status, delete_status, get_status, list_statuses
-from rupmes.controllers.tenants_controller import create_tenant, get_tenant, list_tenants, update_tenant
+from rupmes.controllers.tenants_controller import create_tenant, get_default_tenant, get_tenant, list_tenants, update_tenant
 from rupmes.controllers.users_controller import (
     create_user,
     delete_user,
@@ -73,7 +73,8 @@ from rupmes.controllers.users_controller import (
     update_user,
 )
 from rupmes.controllers.user_roles_controller import list_user_roles, replace_user_roles
-from rupmes.core.config import get_frontend_origins
+from rupmes.controllers.user_tenants_controller import list_user_tenants, replace_user_tenants
+from rupmes.core.config import get_default_tenant_id, get_frontend_origins, is_multi_tenant_enabled
 from rupmes.core.deps import get_db
 from rupmes.core.i18n import get_lang, translate_error, translate_validation
 from rupmes.core.tenant import resolve_tenant_id
@@ -94,10 +95,12 @@ from rupmes.models import ProductionIngestClient
 from rupmes.services.security import hash_password
 from rupmes.views.auth import (
     get_current_session,
+    get_current_user,
     require_admin,
     require_csrf,
     require_permission,
     require_production_ingest_api_key,
+    require_tenant_access,
     router as auth_router,
 )
 from rupmes.controllers.user_status_controller import list_user_statuses
@@ -113,6 +116,7 @@ from rupmes.views.schemas import (
     LineCreate,
     LineRead,
     LineUpdate,
+    LoginContextRead,
     CellCreate,
     CellRead,
     CellUpdate,
@@ -247,6 +251,7 @@ def _serialize_tenant(row: TbTenants) -> TenantRead:
         tenant_id=row.tenant_id,
         name_tenant=row.name_tenant,
         is_active=row.is_active,
+        is_default=row.is_default,
         create_date=row.create_date,
     )
 
@@ -261,6 +266,19 @@ def _serialize_portal_settings(row: TbPortalSettings | None, tenant_id: str) -> 
     )
 
 
+def _serialize_user(db: Session, row: TbUsers) -> UserRead:
+    return UserRead(
+        id_user=row.id_user,
+        name_user=row.name_user,
+        mail_user=row.mail_user,
+        id_group=row.id_group,
+        status_user=row.status_user,
+        role_ids=[role.role_id for role in list_user_roles(db, row.id_user)],
+        accessible_tenant_ids=sorted({tenant.tenant_id for tenant in list_user_tenants(db, row.id_user)} | {row.tenant_id}),
+        create_date=row.create_date,
+    )
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -271,6 +289,18 @@ def get_portal_settings_endpoint(request: Request, db: Session = Depends(get_db)
     tenant_id = resolve_tenant_id(request)
     row = get_portal_settings(db, tenant_id)
     return _serialize_portal_settings(row, tenant_id)
+
+
+@app.get("/public/login-context", response_model=LoginContextRead)
+def get_login_context_endpoint(db: Session = Depends(get_db)):
+    active_tenants = list_tenants(db, active_only=True)
+    default_tenant = get_default_tenant(db, active_only=True)
+    fallback_tenant_id = default_tenant.tenant_id if default_tenant else get_default_tenant_id()
+    return LoginContextRead(
+        multi_tenant_enabled=is_multi_tenant_enabled(),
+        default_tenant_id=fallback_tenant_id,
+        tenants=[_serialize_tenant(row) for row in active_tenants],
+    )
 
 
 @app.put("/portal-settings", response_model=PortalSettingsRead)
@@ -296,9 +326,15 @@ def update_portal_settings_endpoint(
 @app.get("/tenants", response_model=list[TenantRead])
 def list_tenants_endpoint(
     db: Session = Depends(get_db),
-    _admin=Depends(require_admin),
+    current=Depends(get_current_user),
 ):
-    return [_serialize_tenant(row) for row in list_tenants(db)]
+    user = current
+    all_tenants = list_tenants(db)
+    user_tenant_ids = {tenant.tenant_id for tenant in list_user_tenants(db, user.id_user)}
+    user_tenant_ids.add(user.tenant_id)
+    is_admin = any(role.role_id == "ADM" for role in list_user_roles(db, user.id_user))
+    visible = all_tenants if is_admin else [row for row in all_tenants if row.tenant_id in user_tenant_ids and row.is_active]
+    return [_serialize_tenant(row) for row in visible]
 
 
 @app.get("/tenants/{tenant_id}", response_model=TenantRead)
@@ -326,6 +362,7 @@ def create_tenant_endpoint(
         tenant_id=payload.tenant_id,
         name_tenant=payload.name_tenant,
         is_active=payload.is_active,
+        is_default=payload.is_default,
     )
     try:
         row = create_tenant(db, tenant)
@@ -401,20 +438,26 @@ def user_statuses_endpoint(
 
 @app.get("/production-ingest-clients", response_model=list[ProductionIngestClientRead])
 def list_production_ingest_clients_endpoint(
+    request: Request,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.admin")),
+    current=Depends(require_permission("production.admin")),
 ):
-    rows = list_production_ingest_clients(db)
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = list_production_ingest_clients(db, tenant_id=tenant_id)
     return [_serialize_production_ingest_client(row) for row in rows]
 
 
 @app.get("/production-ingest-clients/{client_id}", response_model=ProductionIngestClientRead)
 def get_production_ingest_client_endpoint(
     client_id: str,
+    request: Request,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.admin")),
+    current=Depends(require_permission("production.admin")),
 ):
-    row = get_production_ingest_client(db, client_id)
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_production_ingest_client(db, client_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production ingest client not found")
     return _serialize_production_ingest_client(row)
@@ -439,6 +482,7 @@ def create_production_ingest_client_endpoint(
         machine_code=payload.machine_code,
         source_system=payload.source_system,
         is_active=payload.is_active,
+        tenant_id=require_tenant_access(request, _user, db),
     )
     try:
         row = create_production_ingest_client(db, client)
@@ -458,7 +502,8 @@ def update_production_ingest_client_endpoint(
 ):
     _user, session_row = current
     require_csrf(request, session_row)
-    row = get_production_ingest_client(db, client_id)
+    tenant_id = require_tenant_access(request, _user, db)
+    row = get_production_ingest_client(db, client_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production ingest client not found")
     updates = payload.model_dump(exclude_unset=True)
@@ -484,7 +529,8 @@ def delete_production_ingest_client_endpoint(
 ):
     _user, session_row = current
     require_csrf(request, session_row)
-    row = get_production_ingest_client(db, client_id)
+    tenant_id = require_tenant_access(request, _user, db)
+    row = get_production_ingest_client(db, client_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production ingest client not found")
     delete_production_ingest_client(db, row)
@@ -498,9 +544,10 @@ def create_production_report_endpoint(
     db: Session = Depends(get_db),
     current=Depends(require_permission("production.write")),
 ):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    report = ProductionReport(**payload.model_dump())
+    tenant_id = require_tenant_access(request, user, db)
+    report = ProductionReport(**payload.model_dump(), tenant_id=tenant_id)
     try:
         row = create_production_report(db, report)
     except IntegrityError:
@@ -515,8 +562,8 @@ def ingest_production_report_endpoint(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    require_production_ingest_api_key(request, db, payload)
-    report = ProductionReport(**payload.model_dump())
+    client = require_production_ingest_api_key(request, db, payload)
+    report = ProductionReport(**payload.model_dump(), tenant_id=client.tenant_id if client is not None else get_default_tenant_id())
     try:
         row = create_production_report(db, report)
     except IntegrityError:
@@ -527,15 +574,19 @@ def ingest_production_report_endpoint(
 
 @app.get("/production-reports/analytics/daily-total", response_model=list[DailyProductionTotalRead])
 def production_daily_total_endpoint(
+    request: Request,
     date_from: str | None = None,
     date_to: str | None = None,
     plant_code: str | None = None,
     line_code: str | None = None,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     rows = get_daily_totals(
         db,
+        tenant_id=tenant_id,
         date_from=_parse_datetime_filter(date_from),
         date_to=_parse_datetime_filter(date_to, end_of_day=True),
         plant_code=plant_code,
@@ -552,14 +603,18 @@ def production_daily_total_endpoint(
 
 @app.get("/production-reports/analytics/by-line", response_model=list[ProductionByLineRead])
 def production_by_line_endpoint(
+    request: Request,
     date_from: str | None = None,
     date_to: str | None = None,
     plant_code: str | None = None,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     rows = get_production_by_line(
         db,
+        tenant_id=tenant_id,
         date_from=_parse_datetime_filter(date_from),
         date_to=_parse_datetime_filter(date_to, end_of_day=True),
         plant_code=plant_code,
@@ -569,15 +624,19 @@ def production_by_line_endpoint(
 
 @app.get("/production-reports/analytics/ok-nok-by-shift", response_model=list[OkNokByShiftRead])
 def ok_nok_by_shift_endpoint(
+    request: Request,
     date_from: str | None = None,
     date_to: str | None = None,
     plant_code: str | None = None,
     line_code: str | None = None,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     rows = get_ok_nok_by_shift(
         db,
+        tenant_id=tenant_id,
         date_from=_parse_datetime_filter(date_from),
         date_to=_parse_datetime_filter(date_to, end_of_day=True),
         plant_code=plant_code,
@@ -597,15 +656,19 @@ def ok_nok_by_shift_endpoint(
 
 @app.get("/production-reports/analytics/ftq-fpy", response_model=list[FtqFpyRead])
 def ftq_fpy_endpoint(
+    request: Request,
     date_from: str | None = None,
     date_to: str | None = None,
     plant_code: str | None = None,
     line_code: str | None = None,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     rows = get_ftq_fpy_by_line_and_day(
         db,
+        tenant_id=tenant_id,
         date_from=_parse_datetime_filter(date_from),
         date_to=_parse_datetime_filter(date_to, end_of_day=True),
         plant_code=plant_code,
@@ -628,16 +691,20 @@ def ftq_fpy_endpoint(
 
 @app.get("/production-reports/analytics/top-defects", response_model=list[TopDefectRead])
 def top_defects_endpoint(
+    request: Request,
     date_from: str | None = None,
     date_to: str | None = None,
     plant_code: str | None = None,
     line_code: str | None = None,
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     rows = get_top_defects(
         db,
+        tenant_id=tenant_id,
         date_from=_parse_datetime_filter(date_from),
         date_to=_parse_datetime_filter(date_to, end_of_day=True),
         plant_code=plant_code,
@@ -657,23 +724,30 @@ def top_defects_endpoint(
 @app.get("/production-reports/traceability/{serial_number}", response_model=list[ProductionReportRead])
 def traceability_by_serial_endpoint(
     serial_number: str,
+    request: Request,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
-    rows = get_traceability(db, serial_number)
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = get_traceability(db, serial_number, tenant_id=tenant_id)
     return [_serialize_production_report(row) for row in rows]
 
 
 @app.get("/production-reports/analytics/average-cycle-time", response_model=list[AverageCycleTimeByLineRead])
 def average_cycle_time_by_line_endpoint(
+    request: Request,
     date_from: str | None = None,
     date_to: str | None = None,
     plant_code: str | None = None,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     rows = get_average_cycle_time_by_line(
         db,
+        tenant_id=tenant_id,
         date_from=_parse_datetime_filter(date_from),
         date_to=_parse_datetime_filter(date_to, end_of_day=True),
         plant_code=plant_code,
@@ -691,23 +765,32 @@ def average_cycle_time_by_line_endpoint(
 @app.get("/production-reports/{report_id}", response_model=ProductionReportRead)
 def get_production_report_endpoint(
     report_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("production.read")),
+    current=Depends(require_permission("production.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     row = get_production_report(db, report_id)
     if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production report not found")
+    if row.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production report not found")
     return _serialize_production_report(row)
 
 
 @app.get("/statuses", response_model=list[StatusRead])
-def statuses(db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    rows = list_statuses(db)
+def statuses(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = list_statuses(db, tenant_id=tenant_id)
     return [StatusRead(status_id=row.status_id, description_status=row.description_status) for row in rows]
 
 @app.get("/statuses/{status_id}", response_model=StatusRead)
-def get_status_endpoint(status_id: str, db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    row = get_status(db, status_id)
+def get_status_endpoint(status_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_status(db, status_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status not found")
     return StatusRead(status_id=row.status_id, description_status=row.description_status)
@@ -715,9 +798,10 @@ def get_status_endpoint(status_id: str, db: Session = Depends(get_db), _perm=Dep
 
 @app.post("/statuses", response_model=StatusRead, status_code=status.HTTP_201_CREATED)
 def create_status_endpoint(payload: StatusCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    status_row = TbStatus(status_id=payload.status_id, description_status=payload.description_status)
+    tenant_id = require_tenant_access(request, user, db)
+    status_row = TbStatus(status_id=payload.status_id, description_status=payload.description_status, tenant_id=tenant_id)
     try:
         row = create_status(db, status_row)
     except IntegrityError:
@@ -728,9 +812,10 @@ def create_status_endpoint(payload: StatusCreate, request: Request, db: Session 
 
 @app.patch("/statuses/{status_id}", response_model=StatusRead)
 def update_status(status_id: str, payload: StatusUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_status(db, status_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_status(db, status_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status not found")
     if payload.description_status is not None:
@@ -746,9 +831,10 @@ def update_status(status_id: str, payload: StatusUpdate, request: Request, db: S
 
 @app.delete("/statuses/{status_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_status_endpoint(status_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_status(db, status_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_status(db, status_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status not found")
     delete_status(db, row)
@@ -756,14 +842,18 @@ def delete_status_endpoint(status_id: str, request: Request, db: Session = Depen
 
 
 @app.get("/lines", response_model=list[LineRead])
-def lines(db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    rows = list_lines(db)
+def lines(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = list_lines(db, tenant_id=tenant_id)
     return [LineRead(line_id=row.line_id, description_line=row.description_line, create_date=row.create_date) for row in rows]
 
 
 @app.get("/lines/{line_id}", response_model=LineRead)
-def get_line_endpoint(line_id: str, db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    row = get_line(db, line_id)
+def get_line_endpoint(line_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_line(db, line_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line not found")
     return LineRead(line_id=row.line_id, description_line=row.description_line, create_date=row.create_date)
@@ -771,9 +861,10 @@ def get_line_endpoint(line_id: str, db: Session = Depends(get_db), _perm=Depends
 
 @app.post("/lines", response_model=LineRead, status_code=status.HTTP_201_CREATED)
 def create_line_endpoint(payload: LineCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    line = TbLines(line_id=payload.line_id, description_line=payload.description_line)
+    tenant_id = require_tenant_access(request, user, db)
+    line = TbLines(line_id=payload.line_id, description_line=payload.description_line, tenant_id=tenant_id)
     try:
         row = create_line(db, line)
     except IntegrityError:
@@ -784,9 +875,10 @@ def create_line_endpoint(payload: LineCreate, request: Request, db: Session = De
 
 @app.patch("/lines/{line_id}", response_model=LineRead)
 def update_line_endpoint(line_id: str, payload: LineUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_line(db, line_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_line(db, line_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line not found")
     if payload.description_line is not None:
@@ -801,9 +893,10 @@ def update_line_endpoint(line_id: str, payload: LineUpdate, request: Request, db
 
 @app.delete("/lines/{line_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_line_endpoint(line_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_line(db, line_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_line(db, line_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line not found")
     delete_line(db, row)
@@ -811,14 +904,18 @@ def delete_line_endpoint(line_id: str, request: Request, db: Session = Depends(g
 
 
 @app.get("/cells", response_model=list[CellRead])
-def cells(db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    rows = list_cells(db)
+def cells(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = list_cells(db, tenant_id=tenant_id)
     return [CellRead(cell_id=row.cell_id, description_cell=row.description_cell, create_date=row.create_date) for row in rows]
 
 
 @app.get("/cells/{cell_id}", response_model=CellRead)
-def get_cell_endpoint(cell_id: str, db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    row = get_cell(db, cell_id)
+def get_cell_endpoint(cell_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_cell(db, cell_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
     return CellRead(cell_id=row.cell_id, description_cell=row.description_cell, create_date=row.create_date)
@@ -826,9 +923,10 @@ def get_cell_endpoint(cell_id: str, db: Session = Depends(get_db), _perm=Depends
 
 @app.post("/cells", response_model=CellRead, status_code=status.HTTP_201_CREATED)
 def create_cell_endpoint(payload: CellCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    cell = TbCells(cell_id=payload.cell_id, description_cell=payload.description_cell)
+    tenant_id = require_tenant_access(request, user, db)
+    cell = TbCells(cell_id=payload.cell_id, description_cell=payload.description_cell, tenant_id=tenant_id)
     try:
         row = create_cell(db, cell)
     except IntegrityError:
@@ -839,9 +937,10 @@ def create_cell_endpoint(payload: CellCreate, request: Request, db: Session = De
 
 @app.patch("/cells/{cell_id}", response_model=CellRead)
 def update_cell_endpoint(cell_id: str, payload: CellUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_cell(db, cell_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_cell(db, cell_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
     if payload.description_cell is not None:
@@ -856,9 +955,10 @@ def update_cell_endpoint(cell_id: str, payload: CellUpdate, request: Request, db
 
 @app.delete("/cells/{cell_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_cell_endpoint(cell_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_cell(db, cell_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_cell(db, cell_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
     delete_cell(db, row)
@@ -866,14 +966,18 @@ def delete_cell_endpoint(cell_id: str, request: Request, db: Session = Depends(g
 
 
 @app.get("/models", response_model=list[ModelRead])
-def models(db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    rows = list_models(db)
+def models(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = list_models(db, tenant_id=tenant_id)
     return [ModelRead(model_id=row.model_id, description_model=row.description_model, create_date=row.create_date) for row in rows]
 
 
 @app.get("/models/{model_id}", response_model=ModelRead)
-def get_model_endpoint(model_id: str, db: Session = Depends(get_db), _perm=Depends(require_permission("masters.read"))):
-    row = get_model(db, model_id)
+def get_model_endpoint(model_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_model(db, model_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
     return ModelRead(model_id=row.model_id, description_model=row.description_model, create_date=row.create_date)
@@ -881,9 +985,10 @@ def get_model_endpoint(model_id: str, db: Session = Depends(get_db), _perm=Depen
 
 @app.post("/models", response_model=ModelRead, status_code=status.HTTP_201_CREATED)
 def create_model_endpoint(payload: ModelCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    model = TbModels(model_id=payload.model_id, description_model=payload.description_model)
+    tenant_id = require_tenant_access(request, user, db)
+    model = TbModels(model_id=payload.model_id, description_model=payload.description_model, tenant_id=tenant_id)
     try:
         row = create_model(db, model)
     except IntegrityError:
@@ -894,9 +999,10 @@ def create_model_endpoint(payload: ModelCreate, request: Request, db: Session = 
 
 @app.patch("/models/{model_id}", response_model=ModelRead)
 def update_model_endpoint(model_id: str, payload: ModelUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_model(db, model_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_model(db, model_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
     if payload.description_model is not None:
@@ -911,9 +1017,10 @@ def update_model_endpoint(model_id: str, payload: ModelUpdate, request: Request,
 
 @app.delete("/models/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_model_endpoint(model_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_model(db, model_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_model(db, model_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
     delete_model(db, row)
@@ -921,6 +1028,7 @@ def delete_model_endpoint(model_id: str, request: Request, db: Session = Depends
 
 @app.get("/items", response_model=list[ItemRead])
 def items(
+    request: Request,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     status_id: str | None = None,
@@ -933,8 +1041,10 @@ def items(
     last_test_date_from: str | None = None,
     last_test_date_to: str | None = None,
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("items.read")),
+    current=Depends(require_permission("items.read")),
 ):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
     def _parse_date(value: str | None, end_of_day: bool = False):
         if not value:
             return None
@@ -948,6 +1058,7 @@ def items(
 
     rows = list_items(
         db,
+        tenant_id=tenant_id,
         limit=limit,
         offset=offset,
         status_id=status_id,
@@ -988,8 +1099,9 @@ def items(
 
 @app.post("/items", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
 def create_item_endpoint(payload: ItemCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("items.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
     item = TbItems(
         item_id=payload.item_id,
         model_id=payload.model_id,
@@ -1008,6 +1120,7 @@ def create_item_endpoint(payload: ItemCreate, request: Request, db: Session = De
         value3_str=payload.value3_str,
         value4_str=payload.value4_str,
         value5_str=payload.value5_str,
+        tenant_id=tenant_id,
     )
     try:
         row = create_item(db, item)
@@ -1037,8 +1150,10 @@ def create_item_endpoint(payload: ItemCreate, request: Request, db: Session = De
     )
 
 @app.get("/items/{item_id}", response_model=ItemRead)
-def get_item_endpoint(item_id: str, db: Session = Depends(get_db)):
-    row = get_item(db, item_id)
+def get_item_endpoint(item_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("items.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_item(db, item_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     return ItemRead(
@@ -1066,9 +1181,10 @@ def get_item_endpoint(item_id: str, db: Session = Depends(get_db)):
 
 @app.patch("/items/{item_id}", response_model=ItemRead)
 def update_item_endpoint(item_id: str, payload: ItemUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("items.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_item(db, item_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_item(db, item_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -1103,9 +1219,10 @@ def update_item_endpoint(item_id: str, payload: ItemUpdate, request: Request, db
 
 @app.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_item_endpoint(item_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("items.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_item(db, item_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_item(db, item_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     delete_item(db, row)
@@ -1119,18 +1236,8 @@ def get_my_user_endpoint(
     current=Depends(get_current_session),
 ):
     user, _session_row = current
-    tenant_id = resolve_tenant_id(request)
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-    return UserRead(
-        id_user=user.id_user,
-        name_user=user.name_user,
-        mail_user=user.mail_user,
-        id_group=user.id_group,
-        status_user=user.status_user,
-        role_ids=[role.role_id for role in list_user_roles(db, user.id_user)],
-        create_date=user.create_date,
-    )
+    require_tenant_access(request, user, db)
+    return _serialize_user(db, user)
 
 
 @app.patch("/users/me", response_model=UserRead)
@@ -1142,9 +1249,7 @@ def update_my_user_endpoint(
 ):
     user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    require_tenant_access(request, user, db)
     updates = payload.model_dump(exclude_unset=True)
     password = updates.pop("password", None)
     for field, value in updates.items():
@@ -1154,15 +1259,7 @@ def update_my_user_endpoint(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Update conflict")
-    return UserRead(
-        id_user=row.id_user,
-        name_user=row.name_user,
-        mail_user=row.mail_user,
-        id_group=row.id_group,
-        status_user=row.status_user,
-        role_ids=[role.role_id for role in list_user_roles(db, row.id_user)],
-        create_date=row.create_date,
-    )
+    return _serialize_user(db, row)
 
 @app.get("/users", response_model=list[UserRead])
 def users(
@@ -1173,41 +1270,24 @@ def users(
     _perm=Depends(require_permission("users.read")),
     _admin=Depends(require_admin),
 ):
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, _admin[0], db)
     rows = list_users(db, limit=limit, offset=offset, tenant_id=tenant_id)
-    return [
-        UserRead(
-            id_user=row.id_user,
-            name_user=row.name_user,
-            mail_user=row.mail_user,
-            id_group=row.id_group,
-            status_user=row.status_user,
-            role_ids=[role.role_id for role in list_user_roles(db, row.id_user)],
-            create_date=row.create_date,
-        )
-        for row in rows
-    ]
+    return [_serialize_user(db, row) for row in rows]
 
 
 @app.get("/users/{id_user}", response_model=UserRead)
 def get_user_endpoint(
     id_user: str, request: Request, db: Session = Depends(get_db), _perm=Depends(require_permission("users.read")), _admin=Depends(require_admin)
 ):
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, _admin[0], db)
     row = get_user(db, id_user)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if row.tenant_id != tenant_id:
+    accessible_tenant_ids = {tenant.tenant_id for tenant in list_user_tenants(db, row.id_user)}
+    accessible_tenant_ids.add(row.tenant_id)
+    if tenant_id not in accessible_tenant_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserRead(
-        id_user=row.id_user,
-        name_user=row.name_user,
-        mail_user=row.mail_user,
-        id_group=row.id_group,
-        status_user=row.status_user,
-        role_ids=[role.role_id for role in list_user_roles(db, row.id_user)],
-        create_date=row.create_date,
-    )
+    return _serialize_user(db, row)
 
 
 @app.post("/users", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -1220,7 +1300,12 @@ def create_user_endpoint(
 ):
     _user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, _user, db)
+    accessible_tenant_ids = sorted(set(payload.accessible_tenant_ids or [tenant_id]) | {tenant_id})
+    known_tenant_ids = {tenant.tenant_id for tenant in list_tenants(db)}
+    unknown_tenants = [entry for entry in accessible_tenant_ids if entry not in known_tenant_ids]
+    if unknown_tenants:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown tenants: {unknown_tenants}")
     user = TbUsers(
         id_user=payload.id_user,
         name_user=payload.name_user,
@@ -1236,15 +1321,8 @@ def create_user_endpoint(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists or FK invalid")
     replace_user_roles(db, row.id_user, ["USR"])
-    return UserRead(
-        id_user=row.id_user,
-        name_user=row.name_user,
-        mail_user=row.mail_user,
-        id_group=row.id_group,
-        status_user=row.status_user,
-        role_ids=[role.role_id for role in list_user_roles(db, row.id_user)],
-        create_date=row.create_date,
-    )
+    replace_user_tenants(db, row.id_user, accessible_tenant_ids)
+    return _serialize_user(db, row)
 
 @app.patch("/users/{id_user}", response_model=UserRead)
 def update_user_endpoint(
@@ -1257,13 +1335,22 @@ def update_user_endpoint(
 ):
     _user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, _user, db)
     row = get_user(db, id_user)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if row.tenant_id != tenant_id:
+    row_tenant_ids = {tenant.tenant_id for tenant in list_user_tenants(db, row.id_user)}
+    row_tenant_ids.add(row.tenant_id)
+    if tenant_id not in row_tenant_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     updates = payload.model_dump(exclude_unset=True)
+    accessible_tenant_ids = updates.pop("accessible_tenant_ids", None)
+    if accessible_tenant_ids is not None:
+        scoped_tenant_ids = sorted(set(accessible_tenant_ids or [row.tenant_id]) | {row.tenant_id})
+        known_tenant_ids = {tenant.tenant_id for tenant in list_tenants(db)}
+        unknown_tenants = [entry for entry in scoped_tenant_ids if entry not in known_tenant_ids]
+        if unknown_tenants:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown tenants: {unknown_tenants}")
     password = updates.pop("password", None)
     for field, value in updates.items():
         setattr(row, field, value)
@@ -1272,15 +1359,9 @@ def update_user_endpoint(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Update conflict")
-    return UserRead(
-        id_user=row.id_user,
-        name_user=row.name_user,
-        mail_user=row.mail_user,
-        id_group=row.id_group,
-        status_user=row.status_user,
-        role_ids=[role.role_id for role in list_user_roles(db, row.id_user)],
-        create_date=row.create_date,
-    )
+    if accessible_tenant_ids is not None:
+        replace_user_tenants(db, row.id_user, scoped_tenant_ids)
+    return _serialize_user(db, row)
 
 
 @app.delete("/users/{id_user}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1293,23 +1374,28 @@ def delete_user_endpoint(
 ):
     _user, session_row = current
     require_csrf(request, session_row)
-    tenant_id = resolve_tenant_id(request)
+    tenant_id = require_tenant_access(request, _user, db)
     row = get_user(db, id_user)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if row.tenant_id != tenant_id:
+    row_tenant_ids = {tenant.tenant_id for tenant in list_user_tenants(db, row.id_user)}
+    row_tenant_ids.add(row.tenant_id)
+    if tenant_id not in row_tenant_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     delete_user(db, row)
     return None
 
 @app.get("/routings", response_model=list[RoutingRead])
 def routings(
+    request: Request,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _perm=Depends(require_permission("routings.read")),
+    current=Depends(require_permission("routings.read")),
 ):
-    rows = list_routings(db, limit=limit, offset=offset)
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = list_routings(db, limit=limit, offset=offset, tenant_id=tenant_id)
     return [
         RoutingRead(
             routing_id=row.routing_id,
@@ -1321,8 +1407,10 @@ def routings(
 
 
 @app.get("/routings/{routing_id}", response_model=RoutingRead)
-def get_routing_endpoint(routing_id: str, db: Session = Depends(get_db), _perm=Depends(require_permission("routings.read"))):
-    row = get_routing(db, routing_id)
+def get_routing_endpoint(routing_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_routing(db, routing_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
     return RoutingRead(
@@ -1334,11 +1422,13 @@ def get_routing_endpoint(routing_id: str, db: Session = Depends(get_db), _perm=D
 
 @app.post("/routings", response_model=RoutingRead, status_code=status.HTTP_201_CREATED)
 def create_routing_endpoint(payload: RoutingCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
     routing = TbRoutings(
         routing_id=payload.routing_id,
         description_routing=payload.description_routing,
+        tenant_id=tenant_id,
     )
     try:
         row = create_routing(db, routing)
@@ -1354,9 +1444,10 @@ def create_routing_endpoint(payload: RoutingCreate, request: Request, db: Sessio
 
 @app.patch("/routings/{routing_id}", response_model=RoutingRead)
 def update_routing_endpoint(routing_id: str, payload: RoutingUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_routing(db, routing_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_routing(db, routing_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
     updates = payload.model_dump(exclude_unset=True)
@@ -1376,9 +1467,10 @@ def update_routing_endpoint(routing_id: str, payload: RoutingUpdate, request: Re
 
 @app.delete("/routings/{routing_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_routing_endpoint(routing_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
-    _user, session_row = current
+    user, session_row = current
     require_csrf(request, session_row)
-    row = get_routing(db, routing_id)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_routing(db, routing_id, tenant_id=tenant_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
     delete_routing(db, row)

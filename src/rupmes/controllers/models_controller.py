@@ -4,14 +4,14 @@ from rupmes.models import TbModels
 from rupmes.repositories.models_repository import ModelsRepository
 
 
-def list_models(session: Session):
+def list_models(session: Session, tenant_id: str | None = None):
     repo = ModelsRepository(session)
-    return repo.list_models()
+    return repo.list_models(tenant_id=tenant_id)
 
 
-def get_model(session: Session, model_id: str):
+def get_model(session: Session, model_id: str, tenant_id: str | None = None):
     repo = ModelsRepository(session)
-    return repo.get_model(model_id)
+    return repo.get_model(model_id, tenant_id=tenant_id)
 
 
 def create_model(session: Session, model: TbModels):

@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 import RolesPage from "./pages/RolesPage.jsx";
+import IntegrationClientsPage from "./pages/IntegrationClientsPage.jsx";
 import ItemsPage from "./pages/ItemsPage.jsx";
 import LinesPage from "./pages/LinesPage.jsx";
 import CellsPage from "./pages/CellsPage.jsx";
@@ -39,6 +40,15 @@ export default function App() {
   const checkSession = async () => {
     try {
       const me = await request("/auth/me", { tenantId });
+      if (me.accessible_tenant_ids?.length) {
+        const targetTenant = tenantId && me.accessible_tenant_ids.includes(tenantId)
+          ? tenantId
+          : me.tenant_id || me.accessible_tenant_ids[0];
+        if (targetTenant !== tenantId) {
+          setTenantId(targetTenant);
+          return;
+        }
+      }
       setAuth(me);
     } catch (error) {
       setAuth(null);
@@ -134,6 +144,27 @@ export default function App() {
           element={
             auth ? (
               <UsersPage
+                auth={auth}
+                onLogout={handleLogout}
+                tenantId={tenantId}
+                setTenantId={setTenantId}
+                csrfToken={csrfToken}
+                t={t}
+                lang={lang}
+                setLang={setLang}
+                theme={theme}
+                setTheme={setTheme}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/integrations"
+          element={
+            auth ? (
+              <IntegrationClientsPage
                 auth={auth}
                 onLogout={handleLogout}
                 tenantId={tenantId}

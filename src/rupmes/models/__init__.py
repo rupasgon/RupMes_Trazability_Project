@@ -22,6 +22,7 @@ from .tables import (
     TbUserRoles,
     TbUsers,
     TbUserStatus,
+    TbUserTenants,
 )
 
 __all__ = [
@@ -48,4 +49,5 @@ __all__ = [
     "TbUserRoles",
     "TbUsers",
     "TbUserStatus",
+    "TbUserTenants",
 ]

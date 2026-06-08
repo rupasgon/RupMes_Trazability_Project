@@ -4,14 +4,14 @@ from rupmes.models import TbCells
 from rupmes.repositories.cells_repository import CellsRepository
 
 
-def list_cells(session: Session):
+def list_cells(session: Session, tenant_id: str | None = None):
     repo = CellsRepository(session)
-    return repo.list_cells()
+    return repo.list_cells(tenant_id=tenant_id)
 
 
-def get_cell(session: Session, cell_id: str):
+def get_cell(session: Session, cell_id: str, tenant_id: str | None = None):
     repo = CellsRepository(session)
-    return repo.get_cell(cell_id)
+    return repo.get_cell(cell_id, tenant_id=tenant_id)
 
 
 def create_cell(session: Session, cell: TbCells):

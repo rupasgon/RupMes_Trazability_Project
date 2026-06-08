@@ -70,6 +70,50 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
   const [statuses, setStatuses] = useState([]);
   const [users, setUsers] = useState([]);
 
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter(Boolean).length,
+    [filters],
+  );
+  const uniqueLinesCount = useMemo(
+    () => new Set(items.map((item) => item.line_id).filter(Boolean)).size,
+    [items],
+  );
+  const passCount = useMemo(
+    () => items.filter((item) => ["PASS", "OK"].includes(String(item.status_id || "").toUpperCase())).length,
+    [items],
+  );
+  const passRate = items.length ? Math.round((passCount / items.length) * 100) : 0;
+  const rangeEnd = offset + items.length;
+  const rangeLabel = items.length ? `${offset + 1}-${rangeEnd}` : "0";
+  const latestEvent = useMemo(() => {
+    const values = items
+      .map((item) => item.last_test_date || item.create_date)
+      .filter(Boolean)
+      .map((value) => new Date(value))
+      .filter((value) => !Number.isNaN(value.getTime()));
+    if (!values.length) return null;
+    return new Date(Math.max(...values.map((value) => value.getTime())));
+  }, [items]);
+
+  const formatDateTime = (value) => {
+    if (!value) return t("common.empty");
+    try {
+      return new Intl.DateTimeFormat(lang === "ca" ? "ca-ES" : lang === "en" ? "en-US" : "es-ES", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(value instanceof Date ? value : new Date(value));
+    } catch {
+      return String(value);
+    }
+  };
+
+  const getStatusClassName = (statusId) => {
+    const normalized = String(statusId || "").toUpperCase();
+    if (["PASS", "OK"].includes(normalized)) return "status-chip ok";
+    if (["REWORK", "HOLD", "PENDING"].includes(normalized)) return "status-chip warn";
+    return "status-chip";
+  };
+
   const buildQuery = () => {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -89,7 +133,7 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
 
   useEffect(() => {
     loadItems().catch(() => {});
-  }, [limit, offset]);
+  }, [limit, offset, tenantId]);
 
   useEffect(() => {
     if (!canMasters) return;
@@ -245,20 +289,47 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
       setTheme={setTheme}
     >
       <div className="sticky-stack">
-        <div className="card page-header">
-          <div className="page-header-copy">
+        <div className="card production-hero">
+          <div className="production-hero-copy">
+            <div className="eyebrow">{t("nav.items")}</div>
             <h2>{t("items.title")}</h2>
             <p>{t("items.subtitle")}</p>
           </div>
-          <div className="page-header-meta">
+          <div className="production-hero-meta">
             <div className="badge">{t("common.tenant")}: {tenantId || auth.tenant_id || "DEFAULT"}</div>
+            <div className="crud-card-metric">{t("items.range")}: {rangeLabel}</div>
+          </div>
+          <div className="production-kpis">
+            <div className="production-kpi">
+              <span>{t("items.loaded")}</span>
+              <strong>{items.length}</strong>
+              <small>{t("items.overview")}</small>
+            </div>
+            <div className="production-kpi production-kpi-quality">
+              <span>{t("items.passRate")}</span>
+              <strong>{passRate}%</strong>
+              <small>{passCount}/{items.length || 0} PASS</small>
+            </div>
+            <div className="production-kpi production-kpi-lines">
+              <span>{t("items.activeLines")}</span>
+              <strong>{uniqueLinesCount}</strong>
+              <small>{t("items.activeFilters")}: {activeFilterCount}</small>
+            </div>
+            <div className="production-kpi production-kpi-time">
+              <span>{t("items.lastTest")}</span>
+              <strong>{latestEvent ? formatDateTime(latestEvent) : "--"}</strong>
+              <small>{t("items.pagination")}: {limit} / {offset}</small>
+            </div>
           </div>
         </div>
 
-        <div className="card compact-toolbar" style={{ marginBottom: 0 }}>
-          <div className="row-space">
-            <div className="muted">{t("items.filters")}</div>
-            <div className="row-space">
+        <div className="card compact-toolbar production-toolbar-card" style={{ marginBottom: 0 }}>
+          <div className="production-toolbar-head">
+            <div>
+              <div className="muted">{t("items.filters")}</div>
+              <p>{t("items.filtersHint")}</p>
+            </div>
+            <div className="stack-actions">
               <button className="secondary" onClick={() => loadItems()}>
                 {t("common.apply")}
               </button>
@@ -273,72 +344,110 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
               </button>
             </div>
           </div>
-          <div className="grid three" style={{ marginTop: 10 }}>
-            {canMasters && statuses.length ? (
-              <select className="inline-input" value={filters.status_id} onChange={(e) => setFilters({ ...filters, status_id: e.target.value })}>
-                <option value="">{t("common.select")}</option>
-                {statuses.map((row) => (
-                  <option key={row.status_id} value={row.status_id}>{row.status_id}</option>
-                ))}
-              </select>
-            ) : (
-              <input className="inline-input" placeholder={t("fields.statusId")} value={filters.status_id} onChange={(e) => setFilters({ ...filters, status_id: e.target.value })} />
-            )}
-            {canMasters && lines.length ? (
-              <select className="inline-input" value={filters.line_id} onChange={(e) => setFilters({ ...filters, line_id: e.target.value })}>
-                <option value="">{t("common.select")}</option>
-                {lines.map((row) => (
-                  <option key={row.line_id} value={row.line_id}>{row.line_id}</option>
-                ))}
-              </select>
-            ) : (
-              <input className="inline-input" placeholder={t("fields.lineId")} value={filters.line_id} onChange={(e) => setFilters({ ...filters, line_id: e.target.value })} />
-            )}
-            {canMasters && models.length ? (
-              <select className="inline-input" value={filters.model_id} onChange={(e) => setFilters({ ...filters, model_id: e.target.value })}>
-                <option value="">{t("common.select")}</option>
-                {models.map((row) => (
-                  <option key={row.model_id} value={row.model_id}>{row.model_id}</option>
-                ))}
-              </select>
-            ) : (
-              <input className="inline-input" placeholder={t("fields.modelId")} value={filters.model_id} onChange={(e) => setFilters({ ...filters, model_id: e.target.value })} />
-            )}
-            {canMasters && cells.length ? (
-              <select className="inline-input" value={filters.cell_id} onChange={(e) => setFilters({ ...filters, cell_id: e.target.value })}>
-                <option value="">{t("common.select")}</option>
-                {cells.map((row) => (
-                  <option key={row.cell_id} value={row.cell_id}>{row.cell_id}</option>
-                ))}
-              </select>
-            ) : (
-              <input className="inline-input" placeholder={t("fields.cellId")} value={filters.cell_id} onChange={(e) => setFilters({ ...filters, cell_id: e.target.value })} />
-            )}
-            {canUsers && users.length ? (
-              <select className="inline-input" value={filters.id_user} onChange={(e) => setFilters({ ...filters, id_user: e.target.value })}>
-                <option value="">{t("common.select")}</option>
-                {users.map((row) => (
-                  <option key={row.id_user} value={row.id_user}>{row.id_user}</option>
-                ))}
-              </select>
-            ) : (
-              <input className="inline-input" placeholder={t("fields.userId")} value={filters.id_user} onChange={(e) => setFilters({ ...filters, id_user: e.target.value })} />
-            )}
+          <div className="production-filter-grid">
+            <div className="field">
+              <label>{t("fields.statusId")}</label>
+              {canMasters && statuses.length ? (
+                <select className="inline-input" value={filters.status_id} onChange={(e) => setFilters({ ...filters, status_id: e.target.value })}>
+                  <option value="">{t("common.select")}</option>
+                  {statuses.map((row) => (
+                    <option key={row.status_id} value={row.status_id}>{row.status_id}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="inline-input" placeholder={t("fields.statusId")} value={filters.status_id} onChange={(e) => setFilters({ ...filters, status_id: e.target.value })} />
+              )}
+            </div>
+            <div className="field">
+              <label>{t("fields.lineId")}</label>
+              {canMasters ? (
+                <select className="inline-input" value={filters.line_id} onChange={(e) => setFilters({ ...filters, line_id: e.target.value })} disabled={!lines.length}>
+                  <option value="">{lines.length ? t("common.select") : t("common.empty")}</option>
+                  {lines.map((row) => (
+                    <option key={row.line_id} value={row.line_id}>{row.line_id}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="inline-input" placeholder={t("fields.lineId")} value={filters.line_id} onChange={(e) => setFilters({ ...filters, line_id: e.target.value })} />
+              )}
+            </div>
+            <div className="field">
+              <label>{t("fields.modelId")}</label>
+              {canMasters ? (
+                <select className="inline-input" value={filters.model_id} onChange={(e) => setFilters({ ...filters, model_id: e.target.value })} disabled={!models.length}>
+                  <option value="">{models.length ? t("common.select") : t("common.empty")}</option>
+                  {models.map((row) => (
+                    <option key={row.model_id} value={row.model_id}>{row.model_id}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="inline-input" placeholder={t("fields.modelId")} value={filters.model_id} onChange={(e) => setFilters({ ...filters, model_id: e.target.value })} />
+              )}
+            </div>
+            <div className="field">
+              <label>{t("fields.cellId")}</label>
+              {canMasters ? (
+                <select className="inline-input" value={filters.cell_id} onChange={(e) => setFilters({ ...filters, cell_id: e.target.value })} disabled={!cells.length}>
+                  <option value="">{cells.length ? t("common.select") : t("common.empty")}</option>
+                  {cells.map((row) => (
+                    <option key={row.cell_id} value={row.cell_id}>{row.cell_id}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="inline-input" placeholder={t("fields.cellId")} value={filters.cell_id} onChange={(e) => setFilters({ ...filters, cell_id: e.target.value })} />
+              )}
+            </div>
+            <div className="field">
+              <label>{t("fields.userId")}</label>
+              {canUsers && users.length ? (
+                <select className="inline-input" value={filters.id_user} onChange={(e) => setFilters({ ...filters, id_user: e.target.value })}>
+                  <option value="">{t("common.select")}</option>
+                  {users.map((row) => (
+                    <option key={row.id_user} value={row.id_user}>{row.id_user}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="inline-input" placeholder={t("fields.userId")} value={filters.id_user} onChange={(e) => setFilters({ ...filters, id_user: e.target.value })} />
+              )}
+            </div>
           </div>
-          <div className="grid three" style={{ marginTop: 8 }}>
-            <input className="inline-input" type="datetime-local" value={filters.create_date_from} onChange={(e) => setFilters({ ...filters, create_date_from: e.target.value })} />
-            <input className="inline-input" type="datetime-local" value={filters.create_date_to} onChange={(e) => setFilters({ ...filters, create_date_to: e.target.value })} />
-            <input className="inline-input" type="datetime-local" value={filters.last_test_date_from} onChange={(e) => setFilters({ ...filters, last_test_date_from: e.target.value })} />
-            <input className="inline-input" type="datetime-local" value={filters.last_test_date_to} onChange={(e) => setFilters({ ...filters, last_test_date_to: e.target.value })} />
+          <div className="production-filter-grid production-filter-grid-dates">
+            <div className="field">
+              <label>{t("fields.createDate")} {t("common.from")}</label>
+              <input className="inline-input" type="datetime-local" value={filters.create_date_from} onChange={(e) => setFilters({ ...filters, create_date_from: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>{t("fields.createDate")} {t("common.to")}</label>
+              <input className="inline-input" type="datetime-local" value={filters.create_date_to} onChange={(e) => setFilters({ ...filters, create_date_to: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>{t("fields.lastTestDate")} {t("common.from")}</label>
+              <input className="inline-input" type="datetime-local" value={filters.last_test_date_from} onChange={(e) => setFilters({ ...filters, last_test_date_from: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>{t("fields.lastTestDate")} {t("common.to")}</label>
+              <input className="inline-input" type="datetime-local" value={filters.last_test_date_to} onChange={(e) => setFilters({ ...filters, last_test_date_to: e.target.value })} />
+            </div>
           </div>
         </div>
 
-        <div className="card compact-toolbar" style={{ marginBottom: 0 }}>
-          <div className="row-space">
-            <div className="muted">{t("items.pagination")}</div>
-            <div className="row-space">
-              <input className="inline-input" type="number" min="1" value={limit} onChange={(e) => setLimit(Number(e.target.value))} />
-              <input className="inline-input" type="number" min="0" value={offset} onChange={(e) => setOffset(Number(e.target.value))} />
+        <div className="card compact-toolbar production-toolbar-card" style={{ marginBottom: 0 }}>
+          <div className="production-toolbar-head">
+            <div>
+              <div className="muted">{t("items.pagination")}</div>
+              <p>{t("items.dataset")}</p>
+            </div>
+            <div className="production-pagination-grid">
+              <div className="field">
+                <label>{t("items.limit")}</label>
+                <input className="inline-input" type="number" min="1" value={limit} onChange={(e) => setLimit(Number(e.target.value))} />
+              </div>
+              <div className="field">
+                <label>{t("items.offset")}</label>
+                <input className="inline-input" type="number" min="0" value={offset} onChange={(e) => setOffset(Number(e.target.value))} />
+              </div>
+            </div>
+            <div className="stack-actions">
               <button className="secondary" onClick={() => loadItems()}>{t("common.reload")}</button>
               <button className="secondary" onClick={exportCsv}>{t("common.exportCsv")}</button>
               <button className="secondary" onClick={exportExcel}>{t("common.exportExcel")}</button>
@@ -352,7 +461,7 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
           <div className="crud-card-header">
             <div>
               <h3>{t("items.list")}</h3>
-              <p>{t("items.subtitle")}</p>
+              <p>{t("items.overview")}</p>
             </div>
             <div className="row-space">
               {canWrite ? (
@@ -385,14 +494,21 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.item_id} onClick={() => handleSelect(item)} className={selectedItem?.item_id === item.item_id ? "active" : ""}>
-                    <td>{item.item_id}</td>
-                    <td>{item.model_id}</td>
-                    <td>{item.line_id}</td>
-                    <td>{item.cell_id}</td>
-                    <td>{item.status_id}</td>
-                  </tr>
+                <tr key={item.item_id} onClick={() => handleSelect(item)} className={selectedItem?.item_id === item.item_id ? "active" : ""}>
+                  <td>{item.item_id}</td>
+                  <td>{item.model_id}</td>
+                  <td>{item.line_id}</td>
+                  <td>{item.cell_id}</td>
+                  <td><span className={getStatusClassName(item.status_id)}>{item.status_id}</span></td>
+                </tr>
                 ))}
+                {!items.length ? (
+                  <tr>
+                    <td colSpan="5">
+                      <div className="empty-state table-empty-state">{t("items.empty")}</div>
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -402,100 +518,103 @@ export default function ItemsPage({ auth, onLogout, tenantId, setTenantId, csrfT
           <div className="crud-card-header">
             <div>
               <h3>{editorMode === "edit" ? t("items.edit") : t("items.new")}</h3>
-              <p>{editorMode === "edit" ? t("items.edit") : t("items.new")}</p>
+              <p>{t("items.editorHint")}</p>
             </div>
+            <div className="crud-card-metric">{editorMode === "edit" ? "EDIT" : "NEW"}</div>
           </div>
           {!canWrite && <p className="muted">{t("items.noWrite")}</p>}
           {editorMode === "idle" ? (
-            <div className="empty-state">{t("items.new")} / {t("items.edit")}</div>
+            <div className="empty-state">{t("items.ready")}</div>
           ) : (
             <>
           {selectedItem ? <div className="editor-banner">{t("fields.itemId")}: {selectedItem.item_id}</div> : null}
           <form onSubmit={handleCreate} className="form" style={{ marginTop: 12 }}>
-            <div className="field">
-              <label>{t("fields.itemId")}</label>
-              <input value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })} required disabled={!!selectedItem} />
-            </div>
-            <div className="field">
-              <label>{t("fields.modelId")}</label>
-              {canMasters && models.length ? (
-                <select className="inline-input" value={form.model_id} onChange={(e) => setForm({ ...form, model_id: e.target.value })}>
-                  <option value="">{t("common.select")}</option>
-                  {models.map((row) => (
-                    <option key={row.model_id} value={row.model_id}>{row.model_id} - {row.description_model}</option>
-                  ))}
-                </select>
-              ) : (
-                <input value={form.model_id} onChange={(e) => setForm({ ...form, model_id: e.target.value })} required />
-              )}
-            </div>
-            <div className="field">
-              <label>{t("fields.lineId")}</label>
-              {canMasters && lines.length ? (
-                <select className="inline-input" value={form.line_id} onChange={(e) => setForm({ ...form, line_id: e.target.value })}>
-                  <option value="">{t("common.select")}</option>
-                  {lines.map((row) => (
-                    <option key={row.line_id} value={row.line_id}>{row.line_id} - {row.description_line}</option>
-                  ))}
-                </select>
-              ) : (
-                <input value={form.line_id} onChange={(e) => setForm({ ...form, line_id: e.target.value })} required />
-              )}
-            </div>
-            <div className="field">
-              <label>{t("fields.locationId")}</label>
-              <input type="number" value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })} required />
-            </div>
-            <div className="field">
-              <label>{t("fields.cellId")}</label>
-              {canMasters && cells.length ? (
-                <select className="inline-input" value={form.cell_id} onChange={(e) => setForm({ ...form, cell_id: e.target.value })}>
-                  <option value="">{t("common.select")}</option>
-                  {cells.map((row) => (
-                    <option key={row.cell_id} value={row.cell_id}>{row.cell_id} - {row.description_cell}</option>
-                  ))}
-                </select>
-              ) : (
-                <input value={form.cell_id} onChange={(e) => setForm({ ...form, cell_id: e.target.value })} required />
-              )}
-            </div>
-            <div className="field">
-              <label>{t("login.user")}</label>
-              {canUsers && users.length ? (
-                <select className="inline-input" value={form.id_user} onChange={(e) => setForm({ ...form, id_user: e.target.value })}>
-                  <option value="">{t("common.select")}</option>
-                  {users.map((row) => (
-                    <option key={row.id_user} value={row.id_user}>{row.id_user} - {row.name_user}</option>
-                  ))}
-                </select>
-              ) : (
-                <input value={form.id_user} onChange={(e) => setForm({ ...form, id_user: e.target.value })} required />
-              )}
-            </div>
-            <div className="field">
-              <label>{t("fields.statusId")}</label>
-              {canMasters && statuses.length ? (
-                <select className="inline-input" value={form.status_id} onChange={(e) => setForm({ ...form, status_id: e.target.value })}>
-                  <option value="">{t("common.select")}</option>
-                  {statuses.map((row) => (
-                    <option key={row.status_id} value={row.status_id}>{row.status_id} - {row.description_status}</option>
-                  ))}
-                </select>
-              ) : (
-                <input value={form.status_id} onChange={(e) => setForm({ ...form, status_id: e.target.value })} required />
-              )}
+            <div className="production-form-grid">
+              <div className="field">
+                <label>{t("fields.itemId")}</label>
+                <input value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })} required disabled={!!selectedItem} />
+              </div>
+              <div className="field">
+                <label>{t("fields.modelId")}</label>
+                {canMasters ? (
+                  <select className="inline-input" value={form.model_id} onChange={(e) => setForm({ ...form, model_id: e.target.value })} disabled={!models.length}>
+                    <option value="">{models.length ? t("common.select") : t("common.empty")}</option>
+                    {models.map((row) => (
+                      <option key={row.model_id} value={row.model_id}>{row.model_id} - {row.description_model}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={form.model_id} onChange={(e) => setForm({ ...form, model_id: e.target.value })} required />
+                )}
+              </div>
+              <div className="field">
+                <label>{t("fields.lineId")}</label>
+                {canMasters ? (
+                  <select className="inline-input" value={form.line_id} onChange={(e) => setForm({ ...form, line_id: e.target.value })} disabled={!lines.length}>
+                    <option value="">{lines.length ? t("common.select") : t("common.empty")}</option>
+                    {lines.map((row) => (
+                      <option key={row.line_id} value={row.line_id}>{row.line_id} - {row.description_line}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={form.line_id} onChange={(e) => setForm({ ...form, line_id: e.target.value })} required />
+                )}
+              </div>
+              <div className="field">
+                <label>{t("fields.locationId")}</label>
+                <input type="number" value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })} required />
+              </div>
+              <div className="field">
+                <label>{t("fields.cellId")}</label>
+                {canMasters ? (
+                  <select className="inline-input" value={form.cell_id} onChange={(e) => setForm({ ...form, cell_id: e.target.value })} disabled={!cells.length}>
+                    <option value="">{cells.length ? t("common.select") : t("common.empty")}</option>
+                    {cells.map((row) => (
+                      <option key={row.cell_id} value={row.cell_id}>{row.cell_id} - {row.description_cell}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={form.cell_id} onChange={(e) => setForm({ ...form, cell_id: e.target.value })} required />
+                )}
+              </div>
+              <div className="field">
+                <label>{t("login.user")}</label>
+                {canUsers && users.length ? (
+                  <select className="inline-input" value={form.id_user} onChange={(e) => setForm({ ...form, id_user: e.target.value })}>
+                    <option value="">{t("common.select")}</option>
+                    {users.map((row) => (
+                      <option key={row.id_user} value={row.id_user}>{row.id_user} - {row.name_user}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={form.id_user} onChange={(e) => setForm({ ...form, id_user: e.target.value })} required />
+                )}
+              </div>
+              <div className="field">
+                <label>{t("fields.statusId")}</label>
+                {canMasters && statuses.length ? (
+                  <select className="inline-input" value={form.status_id} onChange={(e) => setForm({ ...form, status_id: e.target.value })}>
+                    <option value="">{t("common.select")}</option>
+                    {statuses.map((row) => (
+                      <option key={row.status_id} value={row.status_id}>{row.status_id} - {row.description_status}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={form.status_id} onChange={(e) => setForm({ ...form, status_id: e.target.value })} required />
+                )}
+              </div>
             </div>
 
             <details className="details">
               <summary>{t("items.optional")}</summary>
-              <div className="grid three">
+              <div className="production-values-grid">
                 <input className="inline-input" placeholder="value1_int" value={form.value1_int} onChange={(e) => setForm({ ...form, value1_int: e.target.value })} />
                 <input className="inline-input" placeholder="value2_int" value={form.value2_int} onChange={(e) => setForm({ ...form, value2_int: e.target.value })} />
                 <input className="inline-input" placeholder="value3_int" value={form.value3_int} onChange={(e) => setForm({ ...form, value3_int: e.target.value })} />
                 <input className="inline-input" placeholder="value4_int" value={form.value4_int} onChange={(e) => setForm({ ...form, value4_int: e.target.value })} />
                 <input className="inline-input" placeholder="value5_int" value={form.value5_int} onChange={(e) => setForm({ ...form, value5_int: e.target.value })} />
               </div>
-              <div className="grid three" style={{ marginTop: 10 }}>
+              <div className="production-values-grid" style={{ marginTop: 10 }}>
                 <input className="inline-input" placeholder="value1_str" value={form.value1_str} onChange={(e) => setForm({ ...form, value1_str: e.target.value })} />
                 <input className="inline-input" placeholder="value2_str" value={form.value2_str} onChange={(e) => setForm({ ...form, value2_str: e.target.value })} />
                 <input className="inline-input" placeholder="value3_str" value={form.value3_str} onChange={(e) => setForm({ ...form, value3_str: e.target.value })} />

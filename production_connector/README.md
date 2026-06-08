@@ -335,6 +335,176 @@ production_connector/configs/
   line_c_opcua.json
 ```
 
+## Scaling model
+
+The gateway is designed to scale by configuration, not by code changes.
+
+If you need to add 10 more machines, lines, PLCs, or source systems, the normal workflow is:
+
+1. Create 10 new pipeline config files
+2. Assign one checkpoint file per pipeline
+3. Assign one `client_id` and `api_key` per pipeline when possible
+4. Start the gateway against the config directory
+
+You should not need to modify Python code to add new equipment.
+
+### What you add for each new equipment
+
+Each equipment integration should define:
+
+- `name`
+- `source.type`
+- source connection or endpoint
+- `date_field`
+- `id_field` or sequence field when available
+- field mapping
+- `checkpoint_file`
+- target API credentials
+
+Example layout for 10 equipments:
+
+```text
+production_connector/
+  configs/
+    line01_sql.json
+    line02_sql.json
+    line03_sql.json
+    line04_mqtt.json
+    line05_mqtt.json
+    line06_opcua.json
+    line07_opcua.json
+    line08_opcua.json
+    line09_sql.json
+    line10_sql.json
+  state/
+    line01_sql.json
+    line02_sql.json
+    line03_sql.json
+    line04_mqtt.json
+    line05_mqtt.json
+    line06_opcua.json
+    line07_opcua.json
+    line08_opcua.json
+    line09_sql.json
+    line10_sql.json
+```
+
+Run all of them with:
+
+```bash
+python -m rupmes_connector run --config production_connector/configs
+```
+
+### Recommended directory structure
+
+For larger installations, group by source type or plant area:
+
+```text
+production_connector/
+  configs/
+    sql/
+    mqtt/
+    opcua/
+  state/
+    sql/
+    mqtt/
+    opcua/
+  logs/
+```
+
+Example:
+
+```text
+production_connector/configs/sql/line01.json
+production_connector/configs/sql/line02.json
+production_connector/configs/mqtt/packaging01.json
+production_connector/configs/opcua/testbench03.json
+```
+
+### When a single process is enough
+
+A single multipipeline process is usually enough when:
+
+- source polling intervals are moderate
+- event volume is low or medium
+- all pipelines run on the same server
+- failure isolation between lines is not critical
+
+### When to split into multiple services
+
+Split the gateway into several services when:
+
+- one source type needs different operational handling
+- one line has much higher throughput than the others
+- different plant areas are on different networks
+- you need to restart one group without affecting the others
+- one customer or plant requires strong isolation
+
+Typical split:
+
+- one service for SQL sources
+- one service for MQTT sources
+- one service for OPC UA sources
+
+Or:
+
+- one service per production area
+- one service per critical line
+
+### Example scalable deployment patterns
+
+Pattern A: one process for everything
+
+```bash
+python -m rupmes_connector run --config production_connector/configs
+```
+
+Pattern B: one process per source family
+
+```bash
+python -m rupmes_connector run --config production_connector/configs/sql
+python -m rupmes_connector run --config production_connector/configs/mqtt
+python -m rupmes_connector run --config production_connector/configs/opcua
+```
+
+Pattern C: one service per critical line
+
+```bash
+python -m rupmes_connector run --config production_connector/configs/opcua/line_a.json
+python -m rupmes_connector run --config production_connector/configs/opcua/line_b.json
+```
+
+### Operational rules for good scalability
+
+- Keep one checkpoint file per pipeline
+- Keep one logical equipment per config file
+- Prefer one `client_id` per line or machine
+- Use `id_field` or sequence counters whenever possible
+- Keep mappings explicit instead of relying on source column names by coincidence
+- Separate high-volume lines from low-volume lines when throughput grows
+- Keep source-specific credentials out of the code and only in config
+
+### Template cloning workflow
+
+Recommended way to onboard a new equipment:
+
+1. Copy a config template close to the target source type
+2. Rename `name`
+3. Update source connection settings
+4. Update `date_field` and `id_field`
+5. Update mapping section
+6. Set a unique checkpoint file
+7. Validate config
+8. Run in `dry_run` or `run-once`
+9. Move to continuous service mode
+
+Validation example:
+
+```bash
+python -m rupmes_connector validate-config --config production_connector/configs/line11_sql.json
+python -m rupmes_connector run-once --config production_connector/configs/line11_sql.json
+```
+
 ## Operational recommendations
 
 - Always use `id_field` or `sequence_id` when available
