@@ -34,7 +34,10 @@ Configurable Windows/Linux gateway that reads industrial source data and pushes 
 ## Structure
 
 - Example config: [config.example.json](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\config.example.json)
-- Windows install: [windows/install.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\install.ps1)
+- Windows scheduled task install: [windows/install-task.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\install-task.ps1)
+- Windows service install: [windows/install-service.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\install-service.ps1)
+- Windows scheduled task uninstall: [windows/uninstall-task.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\uninstall-task.ps1)
+- Windows service uninstall: [windows/uninstall-service.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\uninstall-service.ps1)
 - Linux install: [linux/install.sh](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\install.sh)
 - Linux service unit: [linux/rupmes-production-connector.service](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\rupmes-production-connector.service)
 
@@ -42,19 +45,122 @@ Configurable Windows/Linux gateway that reads industrial source data and pushes 
 
 ### Windows
 
-1. Install Python 3.10 or newer.
-2. Open PowerShell as administrator.
-3. Run:
+Recommended mode:
+
+- Production: Windows service
+- Lab or quick pilot: scheduled task
+- Client runtime: bundled executable, without Python preinstalled
+
+The legacy installer [windows/install.ps1](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\windows\install.ps1) is still available and installs the scheduled task mode for backward compatibility.
+
+#### Build the Windows bundle
+
+Build this once on an engineering or packaging machine, then copy the generated `production_connector/dist/windows/` folder to the target Windows machine.
+
+```powershell
+cd C:\path\to\project
+.\production_connector\windows\build-bundle.ps1 -ProjectRoot "C:\path\to\project"
+```
+
+This generates:
+
+- `production_connector/dist/windows/cli/rupmes-connector.exe`
+- `production_connector/dist/windows/service/rupmes-connector-service.exe`
+
+#### Build the Windows client package
+
+To prepare a client-ready package automatically:
+
+```powershell
+cd C:\path\to\project
+.\production_connector\windows\build-package.ps1 -ProjectRoot "C:\path\to\project" -BuildBundle -ZipPackage
+```
+
+Optional:
+
+- `-ConfigPath "C:\path\to\project\production_connector\config.json"` to include a real client config
+- `-OutputRoot "C:\path\to\output"` to change the delivery folder
+
+This creates:
+
+- `production_connector/release/windows/RupMesProductionConnector/`
+- optionally `production_connector/release/windows/RupMesProductionConnector.zip`
+
+The package already includes:
+
+- bundled executables
+- install and uninstall scripts
+- `state/` and `logs/` folders
+- `config.json` if provided, otherwise `config.template.json`
+
+#### Windows service
+
+1. Build the Windows bundle on a packaging machine.
+2. Copy the project plus `production_connector/dist/windows/` to the target machine.
+3. Open PowerShell as administrator.
+4. Run:
+
+```powershell
+cd C:\path\to\project
+.\production_connector\windows\install-service.ps1 -ProjectRoot "C:\path\to\project" -ConfigPath "C:\path\to\project\production_connector\config.json"
+```
+
+The script:
+- uses `production_connector/dist/windows/service/rupmes-connector-service.exe` when available
+- installs a Windows service called `RupMesProductionConnectorService`
+- writes service settings next to the service runtime
+- starts the service automatically
+
+If the bundle is not present, the script falls back to the Python-based mode for development use.
+
+Optional parameters:
+
+- `-BundleRoot "C:\path\to\project\production_connector\dist\windows\service"`
+- `-ServiceName "RupMesProductionConnectorService"`
+- `-DisplayName "RupMes Production Connector"`
+- `-Description "RupMes production gateway service"`
+- `-LogPath "C:\path\to\project\production_connector\logs\windows-service.log"`
+
+Uninstall:
+
+```powershell
+cd C:\path\to\project
+.\production_connector\windows\uninstall-service.ps1 -ProjectRoot "C:\path\to\project"
+```
+
+#### Windows scheduled task
+
+Use this mode for lab, demo or very small installations.
+
+```powershell
+cd C:\path\to\project
+.\production_connector\windows\install-task.ps1 -ProjectRoot "C:\path\to\project" -ConfigPath "C:\path\to\project\production_connector\config.json"
+```
+
+The script:
+- uses `production_connector/dist/windows/cli/rupmes-connector.exe` when available
+- creates a scheduled task called `RupMesProductionConnector`
+
+If the bundle is not present, the script falls back to the Python-based mode for development use.
+
+Optional parameters:
+
+- `-BundleRoot "C:\path\to\project\production_connector\dist\windows\cli"`
+- `-TaskName "RupMesProductionConnector"`
+
+Backward-compatible alias:
 
 ```powershell
 cd C:\path\to\project
 .\production_connector\windows\install.ps1 -ProjectRoot "C:\path\to\project" -ConfigPath "C:\path\to\project\production_connector\config.json"
 ```
 
-The script:
-- creates `production_connector\.venv`
-- installs the connector extras
-- creates a scheduled task called `RupMesProductionConnector`
+Uninstall:
+
+```powershell
+cd C:\path\to\project
+.\production_connector\windows\uninstall-task.ps1 -TaskName "RupMesProductionConnector"
+```
 
 ### Linux
 

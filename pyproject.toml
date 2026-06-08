@@ -25,6 +25,10 @@ connector = [
   "pyodbc>=5.1",
   "paho-mqtt>=2.1",
   "asyncua>=1.1",
+  "pywin32>=306; platform_system=='Windows'",
+]
+connector-build = [
+  "PyInstaller>=6.0",
 ]
 
 [tool.setuptools]
