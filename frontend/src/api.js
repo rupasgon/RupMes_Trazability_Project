@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8011";
+import { getRuntimeConfig } from "./runtime-config.js";
+
+const API_URL = getRuntimeConfig("VITE_API_URL", import.meta.env.VITE_API_URL || "http://localhost:8011");
 
 export const getCookie = (name) => {
   const value = `; ${document.cookie}`;

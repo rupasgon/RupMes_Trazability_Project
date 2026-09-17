@@ -1,9 +1,9 @@
 {
   "api": {
-    "base_url": "http://localhost:8000",
+    "base_url": "https://api-rupmes.example.local",
     "endpoint": "/production-reports/ingest",
-    "client_id": "LINE-A-PLC",
-    "api_key": "super-secret-line-a",
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}",
     "timeout_seconds": 30,
     "verify_tls": true
   },

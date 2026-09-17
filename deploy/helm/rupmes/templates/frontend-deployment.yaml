@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rupmes.fullname" . }}-frontend
+  labels:
+    {{- include "rupmes.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "rupmes.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "rupmes.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: "{{ .Values.images.frontend.repository }}:{{ .Values.images.frontend.tag }}"
+          imagePullPolicy: {{ .Values.images.frontend.pullPolicy }}
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: VITE_API_URL
+              value: {{ .Values.frontend.runtimeConfig.apiUrl | quote }}
+            - name: VITE_TENANT_ID
+              value: {{ .Values.frontend.runtimeConfig.tenantId | quote }}
+            - name: VITE_CSRF_COOKIE_NAME
+              value: {{ .Values.frontend.runtimeConfig.csrfCookieName | quote }}
+            - name: VITE_DEFAULT_LANG
+              value: {{ .Values.frontend.runtimeConfig.defaultLang | quote }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}

@@ -18,9 +18,14 @@ $serviceDist = Join-Path $distRoot "service"
 $cliWork = Join-Path $buildRoot "cli"
 $serviceWork = Join-Path $buildRoot "service"
 
-Write-Host "Creating build virtual environment in $buildVenvPath"
-& $PythonExe -m venv $buildVenvPath
-if ($LASTEXITCODE -ne 0) { throw "Unable to create build virtual environment" }
+if (-not (Test-Path $pythonBuild)) {
+  Write-Host "Creating build virtual environment in $buildVenvPath"
+  & $PythonExe -m venv $buildVenvPath
+  if ($LASTEXITCODE -ne 0) { throw "Unable to create build virtual environment" }
+}
+else {
+  Write-Host "Reusing build virtual environment in $buildVenvPath"
+}
 
 Write-Host "Installing build dependencies"
 & $pythonBuild -m pip install --upgrade pip
@@ -35,11 +40,11 @@ New-Item -ItemType Directory -Path $serviceWork -Force | Out-Null
 New-Item -ItemType Directory -Path $specRoot -Force | Out-Null
 
 Write-Host "Building CLI bundle"
-& $pyinstallerExe --noconfirm --clean --onedir --contents-directory . --name rupmes-connector --distpath $cliDist --workpath $cliWork --specpath $specRoot "$windowsRoot\entry_cli.py"
+& $pyinstallerExe --noconfirm --clean --onedir --contents-directory . --collect-all pymodbus --collect-all snap7 --name rupmes-connector --distpath $cliDist --workpath $cliWork --specpath $specRoot "$windowsRoot\entry_cli.py"
 if ($LASTEXITCODE -ne 0) { throw "Unable to build CLI bundle" }
 
 Write-Host "Building Windows service bundle"
-& $pyinstallerExe --noconfirm --clean --onedir --contents-directory . --name rupmes-connector-service --distpath $serviceDist --workpath $serviceWork --specpath $specRoot "$windowsRoot\entry_service.py"
+& $pyinstallerExe --noconfirm --clean --onedir --contents-directory . --collect-all pymodbus --collect-all snap7 --name rupmes-connector-service --distpath $serviceDist --workpath $serviceWork --specpath $specRoot "$windowsRoot\entry_service.py"
 if ($LASTEXITCODE -ne 0) { throw "Unable to build Windows service bundle" }
 
 Write-Host "Bundles created in $distRoot"

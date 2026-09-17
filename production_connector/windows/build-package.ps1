@@ -22,6 +22,7 @@ $packageCliRoot = Join-Path $packageDistRoot "cli"
 $packageServiceRoot = Join-Path $packageDistRoot "service"
 $packageStateRoot = Join-Path $packageConnectorRoot "state"
 $packageLogsRoot = Join-Path $packageConnectorRoot "logs"
+$packageTemplatesRoot = Join-Path $packageConnectorRoot "templates"
 $packageZip = Join-Path $releaseRoot "RupMesProductionConnector.zip"
 
 if ($BuildBundle) {
@@ -48,6 +49,7 @@ New-Item -ItemType Directory -Path $packageCliRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $packageServiceRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $packageStateRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $packageLogsRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $packageTemplatesRoot -Force | Out-Null
 
 Copy-Item -Path (Join-Path $windowsRoot "install.ps1") -Destination $packageWindowsRoot -Force
 Copy-Item -Path (Join-Path $windowsRoot "install-task.ps1") -Destination $packageWindowsRoot -Force
@@ -57,6 +59,8 @@ Copy-Item -Path (Join-Path $windowsRoot "uninstall-service.ps1") -Destination $p
 
 Copy-Item -Path (Join-Path $cliBundleRoot "*") -Destination $packageCliRoot -Recurse -Force
 Copy-Item -Path (Join-Path $serviceBundleRoot "*") -Destination $packageServiceRoot -Recurse -Force
+Copy-Item -Path (Join-Path $connectorRoot "templates\*") -Destination $packageTemplatesRoot -Recurse -Force
+Copy-Item -Path (Join-Path $connectorRoot "secrets.env.template") -Destination (Join-Path $packageConnectorRoot "secrets.env.template") -Force
 
 if (-not [string]::IsNullOrWhiteSpace($ConfigPath)) {
   Copy-Item -Path $ConfigPath -Destination (Join-Path $packageConnectorRoot "config.json") -Force
@@ -72,7 +76,9 @@ Recommended installation on client machines:
 
 1. Open PowerShell as administrator.
 2. Edit production_connector\config.json if included, or copy config.template.json to config.json and complete it.
-3. Install as Windows service:
+3. Copy a suitable file from production_connector\templates to production_connector\config.json and set its values.
+4. Copy secrets.env.template to secrets.env and set RUPMES_CLIENT_ID and RUPMES_API_KEY.
+5. Install as Windows service:
    .\production_connector\windows\install-service.ps1 -ProjectRoot "<package-root>" -ConfigPath "<package-root>\production_connector\config.json"
 
 Alternative lab mode:

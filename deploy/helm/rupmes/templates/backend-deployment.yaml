@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rupmes.fullname" . }}-backend
+  labels:
+    {{- include "rupmes.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "rupmes.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "rupmes.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.backend.service.port }}
+              name: http
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rupmes.fullname" . }}-backend
+                  key: DATABASE_URL
+            - name: PRODUCTION_INGEST_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rupmes.fullname" . }}-backend
+                  key: PRODUCTION_INGEST_API_KEY
+            - name: BACKEND_PORT
+              value: {{ .Values.backend.service.port | quote }}
+            - name: WAIT_FOR_DB_ON_STARTUP
+              value: {{ .Values.backend.env.waitForDbOnStartup | quote }}
+            - name: WAIT_FOR_DB_TIMEOUT
+              value: {{ .Values.backend.env.waitForDbTimeout | quote }}
+            - name: RUN_DB_MIGRATIONS
+              value: {{ .Values.backend.env.runDbMigrations | quote }}
+            - name: RUN_DB_SEED
+              value: {{ .Values.backend.env.runDbSeed | quote }}
+            - name: FRONTEND_ORIGINS
+              value: {{ .Values.backend.env.frontendOrigins | quote }}
+            - name: COOKIE_SECURE
+              value: {{ .Values.backend.env.cookieSecure | quote }}
+            - name: COOKIE_SAMESITE
+              value: {{ .Values.backend.env.cookieSameSite | quote }}
+            - name: SESSION_TTL_MINUTES
+              value: {{ .Values.backend.env.sessionTtlMinutes | quote }}
+            - name: SESSION_COOKIE_NAME
+              value: {{ .Values.backend.env.sessionCookieName | quote }}
+            - name: CSRF_COOKIE_NAME
+              value: {{ .Values.backend.env.csrfCookieName | quote }}
+            - name: MULTI_TENANT_ENABLED
+              value: {{ .Values.backend.env.multiTenantEnabled | quote }}
+            - name: DEFAULT_TENANT_ID
+              value: {{ .Values.backend.env.defaultTenantId | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}

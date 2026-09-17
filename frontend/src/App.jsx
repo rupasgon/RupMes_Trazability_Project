@@ -12,10 +12,12 @@ import LinesPage from "./pages/LinesPage.jsx";
 import CellsPage from "./pages/CellsPage.jsx";
 import ModelsPage from "./pages/ModelsPage.jsx";
 import StatusesPage from "./pages/StatusesPage.jsx";
+import RoutingsPage from "./pages/RoutingsPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
+import { getRuntimeConfig } from "./runtime-config.js";
 import "./styles.css";
 
-const CSRF_COOKIE = import.meta.env.VITE_CSRF_COOKIE_NAME || "rupmes_csrf";
+const CSRF_COOKIE = getRuntimeConfig("VITE_CSRF_COOKIE_NAME", import.meta.env.VITE_CSRF_COOKIE_NAME || "rupmes_csrf");
 
 export default function App() {
   const { lang, setLang, t } = useI18n();
@@ -32,7 +34,7 @@ export default function App() {
     return "light";
   });
   const [tenantId, setTenantId] = useState(
-    localStorage.getItem("rupmes_tenant") || import.meta.env.VITE_TENANT_ID || ""
+    localStorage.getItem("rupmes_tenant") || getRuntimeConfig("VITE_TENANT_ID", import.meta.env.VITE_TENANT_ID || "")
   );
 
   const csrfToken = useMemo(() => getCookie(CSRF_COOKIE), [auth]);
@@ -325,6 +327,12 @@ export default function App() {
             ) : (
               <Navigate to="/login" replace />
             )
+          }
+        />
+        <Route
+          path="/routings"
+          element={
+            auth ? <RoutingsPage auth={auth} onLogout={handleLogout} tenantId={tenantId} setTenantId={setTenantId} csrfToken={csrfToken} t={t} lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} /> : <Navigate to="/login" replace />
           }
         />
         <Route path="*" element={<Navigate to={auth ? "/" : "/login"} replace />} />

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -19,7 +19,13 @@ def _parse_datetime(value: str) -> datetime:
 def load_checkpoint(path: str | Path, initial_value: str) -> Checkpoint:
     checkpoint_path = Path(path)
     if not checkpoint_path.exists():
-        return Checkpoint(last_value=_parse_datetime(initial_value), last_id=None)
+        try:
+            return Checkpoint(last_value=_parse_datetime(initial_value), last_id=None)
+        except ValueError:
+            # Sequence checkpoints do not consume last_value. Keep a stable date
+            # for the shared state format and seed the sequence from initial_value.
+            initial_id: str | int = int(initial_value) if initial_value.isdigit() else initial_value
+            return Checkpoint(last_value=datetime(1970, 1, 1), last_id=initial_id)
 
     payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     return Checkpoint(
@@ -36,7 +42,7 @@ def save_checkpoint(path: str | Path, checkpoint: Checkpoint) -> None:
             {
                 "last_value": checkpoint.last_value.isoformat(),
                 "last_id": checkpoint.last_id,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             indent=2,
         ),

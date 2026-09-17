@@ -19,6 +19,7 @@ PACKAGE_DIST_ROOT="${PACKAGE_CONNECTOR_ROOT}/dist/linux"
 PACKAGE_CLI_ROOT="${PACKAGE_DIST_ROOT}/cli"
 PACKAGE_STATE_ROOT="${PACKAGE_CONNECTOR_ROOT}/state"
 PACKAGE_LOGS_ROOT="${PACKAGE_CONNECTOR_ROOT}/logs"
+PACKAGE_TEMPLATES_ROOT="${PACKAGE_CONNECTOR_ROOT}/templates"
 PACKAGE_ZIP="${RELEASE_ROOT}/RupMesProductionConnector.tar.gz"
 SERVICE_NAME="rupmes-production-connector"
 
@@ -33,12 +34,14 @@ if [[ ! -f "${CLI_EXE}" ]]; then
 fi
 
 rm -rf "${PACKAGE_ROOT}"
-mkdir -p "${PACKAGE_LINUX_ROOT}" "${PACKAGE_CLI_ROOT}" "${PACKAGE_STATE_ROOT}" "${PACKAGE_LOGS_ROOT}"
+mkdir -p "${PACKAGE_LINUX_ROOT}" "${PACKAGE_CLI_ROOT}" "${PACKAGE_STATE_ROOT}" "${PACKAGE_LOGS_ROOT}" "${PACKAGE_TEMPLATES_ROOT}"
 
 cp "${LINUX_ROOT}/install.sh" "${PACKAGE_LINUX_ROOT}/"
 cp "${LINUX_ROOT}/uninstall.sh" "${PACKAGE_LINUX_ROOT}/"
 cp "${LINUX_ROOT}/${SERVICE_NAME}.service" "${PACKAGE_LINUX_ROOT}/${SERVICE_NAME}.service"
 cp -r "${CLI_BUNDLE_ROOT}/." "${PACKAGE_CLI_ROOT}/"
+cp -r "${CONNECTOR_ROOT}/templates/." "${PACKAGE_TEMPLATES_ROOT}/"
+cp "${CONNECTOR_ROOT}/secrets.env.template" "${PACKAGE_CONNECTOR_ROOT}/secrets.env.template"
 
 if [[ -n "${CONFIG_PATH}" ]]; then
   cp "${CONFIG_PATH}" "${PACKAGE_CONNECTOR_ROOT}/config.json"
@@ -53,7 +56,9 @@ Recommended installation on client machines:
 
 1. Open a shell with sudo permissions.
 2. Edit production_connector/config.json if included, or copy config.template.json to config.json and complete it.
-3. Install as systemd service:
+3. Copy a suitable file from production_connector/templates to production_connector/config.json and set its values.
+4. Copy secrets.env.template to secrets.env and set RUPMES_CLIENT_ID and RUPMES_API_KEY.
+5. Install as systemd service:
    ./production_connector/linux/install.sh "<package-root>" "<package-root>/production_connector/config.json"
 EOF
 

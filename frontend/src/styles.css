@@ -1572,6 +1572,91 @@ select.inline-input {
   min-height: 170px;
 }
 
+.routing-detail-grid {
+  margin-top: 18px;
+  align-items: start;
+}
+
+.inline-form {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.inline-form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip-list .status-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  margin-left: 6px;
+  padding: 0;
+}
+
+.routing-process-list {
+  display: grid;
+  gap: 10px;
+}
+
+.routing-process {
+  align-items: flex-start;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.routing-process strong,
+.routing-process span {
+  display: block;
+}
+
+.routing-process span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.routing-process .chip-list .status-chip {
+  color: var(--text);
+  margin-top: 0;
+}
+
+.routing-process-form {
+  border-top: 1px solid var(--border-soft);
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.field-builder {
+  background: var(--surface-muted);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.compact {
+  align-self: start;
+  padding: 7px 10px;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;

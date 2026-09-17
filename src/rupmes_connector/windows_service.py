@@ -4,6 +4,7 @@ import json
 import logging
 import logging.handlers
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -85,9 +86,25 @@ class RupMesProductionConnectorService(win32serviceutil.ServiceFramework):
         for service in services:
             self.logger.info("Loaded pipeline %s (%s)", service.config.name, service.config.source.type)
 
+        streaming_services = [service for service in services if getattr(service.adapter, "supports_streaming", False)]
+        polling_services = [service for service in services if service not in streaming_services]
+
+        for service in streaming_services:
+            threading.Thread(
+                target=self._run_streaming_service,
+                args=(service,),
+                name=f"rupmes-{service.config.name}",
+                daemon=True,
+            ).start()
+
         while win32event.WaitForSingleObject(self.stop_event, 0) != win32event.WAIT_OBJECT_0:
-            sleep_for = min(service.config.runtime.poll_interval_seconds for service in services)
-            for service in services:
+            if not polling_services:
+                if win32event.WaitForSingleObject(self.stop_event, 1000) == win32event.WAIT_OBJECT_0:
+                    break
+                continue
+
+            sleep_for = min(service.config.runtime.poll_interval_seconds for service in polling_services)
+            for service in polling_services:
                 try:
                     processed = service.run_once()
                     self.logger.info("[%s] Cycle completed. Rows transferred: %s", service.config.name, processed)
@@ -97,6 +114,12 @@ class RupMesProductionConnectorService(win32serviceutil.ServiceFramework):
                         raise
             if win32event.WaitForSingleObject(self.stop_event, int(sleep_for * 1000)) == win32event.WAIT_OBJECT_0:
                 break
+
+    def _run_streaming_service(self, service: ProductionBridgeService) -> None:
+        try:
+            service.run_forever()
+        except Exception as exc:  # pragma: no cover - service runtime guard
+            self.logger.exception("[%s] Streaming pipeline stopped: %s", service.config.name, exc)
 
 
 def _configure_logging(level: str, log_path: str | None) -> None:

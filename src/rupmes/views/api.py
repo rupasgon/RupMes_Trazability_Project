@@ -63,6 +63,20 @@ from rupmes.controllers.routings_controller import (
     list_routings,
     update_routing,
 )
+from rupmes.controllers.routing_execution_controller import (
+    create_routing_process,
+    create_routing_process_result,
+    create_routing_model,
+    delete_routing_process,
+    delete_routing_model,
+    get_routing_process,
+    get_routing_model,
+    list_routing_process_results,
+    list_routing_processes,
+    list_routing_models,
+    update_routing_process,
+    update_routing_model,
+)
 from rupmes.controllers.status_controller import create_status, delete_status, get_status, list_statuses
 from rupmes.controllers.tenants_controller import create_tenant, get_default_tenant, get_tenant, list_tenants, update_tenant
 from rupmes.controllers.users_controller import (
@@ -80,6 +94,9 @@ from rupmes.core.i18n import get_lang, translate_error, translate_validation
 from rupmes.core.tenant import resolve_tenant_id
 from rupmes.models import (
     ProductionReport,
+    RoutingProcess,
+    RoutingProcessResult,
+    RoutingModel,
     TbCells,
     TbGroups,
     TbItems,
@@ -124,6 +141,15 @@ from rupmes.views.schemas import (
     ModelRead,
     ModelUpdate,
     RoutingCreate,
+    RoutingDefinitionRead,
+    RoutingProcessCreate,
+    RoutingProcessRead,
+    RoutingProcessResultCreate,
+    RoutingProcessResultRead,
+    RoutingProcessUpdate,
+    RoutingModelCreate,
+    RoutingModelRead,
+    RoutingModelUpdate,
     RoutingRead,
     RoutingUpdate,
     ProductionByLineRead,
@@ -244,6 +270,82 @@ def _serialize_production_ingest_client(row: ProductionIngestClient) -> Producti
         is_active=row.is_active,
         created_at=row.created_at,
     )
+
+
+def _serialize_routing_process(row: RoutingProcess) -> RoutingProcessRead:
+    return RoutingProcessRead(
+        routing_id=row.routing_id,
+        process_id=row.process_id,
+        description=row.description,
+        cell_id=row.cell_id,
+        sequence=row.sequence,
+        is_required=row.is_required,
+        result_schema=row.result_schema or [],
+        create_date=row.create_date,
+    )
+
+
+def _serialize_routing_model(row: RoutingModel) -> RoutingModelRead:
+    return RoutingModelRead(
+        model_id=row.model_id,
+        routing_id=row.routing_id,
+        is_active=row.is_active,
+        create_date=row.create_date,
+    )
+
+
+def _serialize_routing_process_result(row: RoutingProcessResult) -> RoutingProcessResultRead:
+    return RoutingProcessResultRead(
+        id=row.id,
+        model_id=row.model_id,
+        serial_number=row.serial_number,
+        routing_id=row.routing_id,
+        process_id=row.process_id,
+        cell_id=row.cell_id,
+        result=row.result,
+        result_values=row.result_values or {},
+        result_schema=row.result_schema or [],
+        process_datetime=row.process_datetime,
+        source_system=row.source_system,
+        created_at=row.created_at,
+    )
+
+
+def _validate_result_values(process: RoutingProcess, result: str, values: dict) -> None:
+    fields = process.result_schema or []
+    field_by_code = {field["code"]: field for field in fields}
+    unknown = sorted(set(values) - set(field_by_code))
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Unknown result fields: {', '.join(unknown)}")
+    if result == "SKIPPED":
+        return
+    for code, field in field_by_code.items():
+        if field.get("required") and (code not in values or values[code] is None or values[code] == ""):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Required result field missing: {code}")
+        if code not in values or values[code] is None:
+            continue
+        value = values[code]
+        field_type = field["type"]
+        if field_type == "text" and not isinstance(value, str):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Result field '{code}' must be text")
+        if field_type == "number" and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Result field '{code}' must be numeric")
+        if field_type == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Result field '{code}' must be an integer")
+        if field_type == "boolean" and not isinstance(value, bool):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Result field '{code}' must be boolean")
+        if field_type == "select" and value not in field.get("allowed_values", []):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Invalid option for result field '{code}'")
+        if field_type == "date":
+            try:
+                date.fromisoformat(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Result field '{code}' must be an ISO date")
+        if field_type == "datetime":
+            try:
+                datetime.fromisoformat(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Result field '{code}' must be an ISO datetime")
 
 
 def _serialize_tenant(row: TbTenants) -> TenantRead:
@@ -1400,6 +1502,7 @@ def routings(
         RoutingRead(
             routing_id=row.routing_id,
             description_routing=row.description_routing,
+            line_id=row.line_id,
             create_date=row.create_date,
         )
         for row in rows
@@ -1416,6 +1519,7 @@ def get_routing_endpoint(routing_id: str, request: Request, db: Session = Depend
     return RoutingRead(
         routing_id=row.routing_id,
         description_routing=row.description_routing,
+        line_id=row.line_id,
         create_date=row.create_date,
     )
 
@@ -1425,9 +1529,12 @@ def create_routing_endpoint(payload: RoutingCreate, request: Request, db: Sessio
     user, session_row = current
     require_csrf(request, session_row)
     tenant_id = require_tenant_access(request, user, db)
+    if not get_line(db, payload.line_id, tenant_id=tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line not found")
     routing = TbRoutings(
         routing_id=payload.routing_id,
         description_routing=payload.description_routing,
+        line_id=payload.line_id,
         tenant_id=tenant_id,
     )
     try:
@@ -1438,6 +1545,7 @@ def create_routing_endpoint(payload: RoutingCreate, request: Request, db: Sessio
     return RoutingRead(
         routing_id=row.routing_id,
         description_routing=row.description_routing,
+        line_id=row.line_id,
         create_date=row.create_date,
     )
 
@@ -1451,6 +1559,8 @@ def update_routing_endpoint(routing_id: str, payload: RoutingUpdate, request: Re
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
     updates = payload.model_dump(exclude_unset=True)
+    if updates.get("line_id") and not get_line(db, updates["line_id"], tenant_id=tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line not found")
     for field, value in updates.items():
         setattr(row, field, value)
     try:
@@ -1461,6 +1571,7 @@ def update_routing_endpoint(routing_id: str, payload: RoutingUpdate, request: Re
     return RoutingRead(
         routing_id=row.routing_id,
         description_routing=row.description_routing,
+        line_id=row.line_id,
         create_date=row.create_date,
     )
 
@@ -1475,3 +1586,165 @@ def delete_routing_endpoint(routing_id: str, request: Request, db: Session = Dep
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
     delete_routing(db, row)
     return None
+
+
+@app.get("/routings/{routing_id}/definition", response_model=RoutingDefinitionRead)
+def get_routing_definition_endpoint(routing_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    routing = get_routing(db, routing_id, tenant_id=tenant_id)
+    if not routing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
+    return RoutingDefinitionRead(
+        routing_id=routing.routing_id,
+        description_routing=routing.description_routing,
+        line_id=routing.line_id,
+        create_date=routing.create_date,
+        processes=[_serialize_routing_process(row) for row in list_routing_processes(db, routing_id, tenant_id)],
+        models=[_serialize_routing_model(row) for row in list_routing_models(db, tenant_id, routing_id)],
+    )
+
+
+@app.post("/routings/{routing_id}/processes", response_model=RoutingProcessRead, status_code=status.HTTP_201_CREATED)
+def create_routing_process_endpoint(routing_id: str, payload: RoutingProcessCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    if not get_routing(db, routing_id, tenant_id=tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
+    if not get_cell(db, payload.cell_id, tenant_id=tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
+    row = RoutingProcess(routing_id=routing_id, tenant_id=tenant_id, **payload.model_dump())
+    try:
+        return _serialize_routing_process(create_routing_process(db, row))
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Process ID or sequence already exists in this routing")
+
+
+@app.patch("/routings/{routing_id}/processes/{process_id}", response_model=RoutingProcessRead)
+def update_routing_process_endpoint(routing_id: str, process_id: str, payload: RoutingProcessUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_routing_process(db, routing_id, process_id, tenant_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing process not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "result_schema" in updates:
+        RoutingProcessCreate(
+            process_id=row.process_id,
+            description=updates.get("description", row.description),
+            cell_id=updates.get("cell_id", row.cell_id),
+            sequence=updates.get("sequence", row.sequence),
+            is_required=updates.get("is_required", row.is_required),
+            result_schema=updates["result_schema"],
+        )
+    if updates.get("cell_id") and not get_cell(db, updates["cell_id"], tenant_id=tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
+    for field, value in updates.items():
+        setattr(row, field, value)
+    try:
+        return _serialize_routing_process(update_routing_process(db, row))
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Process sequence already exists in this routing")
+
+
+@app.delete("/routings/{routing_id}/processes/{process_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_routing_process_endpoint(routing_id: str, process_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_routing_process(db, routing_id, process_id, tenant_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing process not found")
+    delete_routing_process(db, row)
+    return None
+
+
+@app.get("/routing-models", response_model=list[RoutingModelRead])
+def list_routing_models_endpoint(request: Request, routing_id: str | None = None, db: Session = Depends(get_db), current=Depends(require_permission("routings.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    return [_serialize_routing_model(row) for row in list_routing_models(db, tenant_id, routing_id)]
+
+
+@app.post("/routing-models", response_model=RoutingModelRead, status_code=status.HTTP_201_CREATED)
+def create_routing_model_endpoint(payload: RoutingModelCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    if not get_routing(db, payload.routing_id, tenant_id=tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
+    model = get_model(db, payload.model_id, tenant_id=tenant_id)
+    if not model:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+    row = RoutingModel(tenant_id=tenant_id, **payload.model_dump())
+    try:
+        return _serialize_routing_model(create_routing_model(db, row))
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Model already has a routing")
+
+
+@app.patch("/routing-models/{model_id}", response_model=RoutingModelRead)
+def update_routing_model_endpoint(model_id: str, payload: RoutingModelUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_routing_model(db, model_id, tenant_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing model not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if updates.get("routing_id") and not get_routing(db, updates["routing_id"], tenant_id=tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing not found")
+    for field, value in updates.items():
+        setattr(row, field, value)
+    return _serialize_routing_model(update_routing_model(db, row))
+
+
+@app.delete("/routing-models/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_routing_model_endpoint(model_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = get_routing_model(db, model_id, tenant_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routing model not found")
+    delete_routing_model(db, row)
+    return None
+
+
+@app.get("/routing-process-results/{serial_number}", response_model=list[RoutingProcessResultRead])
+def list_routing_process_results_endpoint(serial_number: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("routings.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    return [_serialize_routing_process_result(row) for row in list_routing_process_results(db, serial_number, tenant_id)]
+
+
+@app.post("/routing-process-results/ingest", response_model=RoutingProcessResultRead, status_code=status.HTTP_201_CREATED)
+def ingest_routing_process_result_endpoint(payload: RoutingProcessResultCreate, request: Request, db: Session = Depends(get_db)):
+    client = require_production_ingest_api_key(request, db, payload)
+    tenant_id = client.tenant_id if client is not None else get_default_tenant_id()
+    model = get_routing_model(db, payload.model_id, tenant_id)
+    if not model or not model.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active routing model not found")
+    process = get_routing_process(db, model.routing_id, payload.process_id, tenant_id)
+    if not process:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Process is not defined for the reference routing")
+    _validate_result_values(process, payload.result, payload.result_values)
+    row = RoutingProcessResult(
+        tenant_id=tenant_id,
+        routing_id=model.routing_id,
+        model_id=payload.model_id,
+        serial_number=payload.serial_number,
+        process_id=payload.process_id,
+        cell_id=process.cell_id,
+        result=payload.result,
+        result_values=payload.result_values,
+        result_schema=process.result_schema or [],
+        process_datetime=payload.process_datetime,
+        source_system=payload.source_system,
+    )
+    return _serialize_routing_process_result(create_routing_process_result(db, row))

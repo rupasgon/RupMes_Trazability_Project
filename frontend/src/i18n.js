@@ -720,7 +720,11 @@ export const translations = {
   },
 };
 
-export const getLang = () => localStorage.getItem("rupmes_lang") || import.meta.env.VITE_DEFAULT_LANG || "es";
+export const getLang = () =>
+  localStorage.getItem("rupmes_lang") ||
+  window.__RUPMES_CONFIG__?.VITE_DEFAULT_LANG ||
+  import.meta.env.VITE_DEFAULT_LANG ||
+  "es";
 
 export const setLang = (lang) => {
   localStorage.setItem("rupmes_lang", lang);

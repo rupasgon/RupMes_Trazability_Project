@@ -45,7 +45,7 @@ class MqttSourceAdapter(BaseSourceAdapter):
             if not isinstance(row, dict):
                 raise RuntimeError("MQTT JSON payload must be an object")
             with self._queue_lock:
-                self._queue.append(row)
+                self._queue.append(self.attach_received_timestamp(row))
 
         client.on_message = on_message
         return client
@@ -64,7 +64,13 @@ class MqttSourceAdapter(BaseSourceAdapter):
             self._queue.clear()
         return [
             row for row in rows
-            if is_newer_row(row, checkpoint, self.config.date_field, self.config.id_field)
+            if is_newer_row(
+                row,
+                checkpoint,
+                self.config.date_field,
+                self.config.id_field,
+                self.config.checkpoint_mode,
+            )
         ]
 
     def run_forever(
@@ -87,7 +93,13 @@ class MqttSourceAdapter(BaseSourceAdapter):
                     while self._queue:
                         batch.append(self._queue.popleft())
                 for row in batch:
-                    if is_newer_row(row, current_checkpoint, self.config.date_field, self.config.id_field):
+                    if is_newer_row(
+                        row,
+                        current_checkpoint,
+                        self.config.date_field,
+                        self.config.id_field,
+                        self.config.checkpoint_mode,
+                    ):
                         on_row(row)
                         current_checkpoint = checkpoint
                 time.sleep(poll_interval_seconds)

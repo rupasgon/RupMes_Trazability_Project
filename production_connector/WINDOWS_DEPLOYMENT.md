@@ -34,8 +34,15 @@ Do not copy the source repository.
 1. Copy the package to the target machine.
 2. Extract it if you copied the ZIP.
 3. Edit `production_connector\config.json` if included, or copy `config.template.json` to `config.json`.
-4. Open PowerShell as administrator.
-5. Install the service:
+4. Copy `production_connector\secrets.env.template` to `production_connector\secrets.env` and store the integration `client_id` and API key there.
+5. Copy the closest file from `production_connector\templates\` to `production_connector\config.json` when configuring TCP, Modbus or Siemens S7.
+6. Validate the configuration before installing the service:
+
+```powershell
+.\production_connector\dist\windows\cli\rupmes-connector\rupmes-connector.exe validate-config --config .\production_connector\config.json
+```
+
+7. Install the service:
 
 ```powershell
 cd C:\path\to\RupMesProductionConnector

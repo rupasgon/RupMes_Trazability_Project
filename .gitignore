@@ -1,2 +1,6 @@
 __pycache__/
 *.py[cod]
+production_connector/config.json
+production_connector/secrets.env
+production_connector/state/
+production_connector/logs/

@@ -86,6 +86,26 @@ def build_payload(row: dict[str, Any], payload_config: PayloadConfig) -> dict[st
 
         payload[target_field] = _apply_transform(raw_value, mapping.transform)
 
+    for target_field, nested_fields in payload_config.nested_mappings.items():
+        nested_payload: dict[str, Any] = {}
+        for nested_key, mapping in nested_fields.items():
+            if mapping.source is not None:
+                raw_value = row.get(mapping.source)
+            elif mapping.constant is not None:
+                raw_value = mapping.constant
+            else:
+                raw_value = mapping.default
+
+            if raw_value is None and mapping.default is not None:
+                raw_value = mapping.default
+            normalized_key = str(raw_value) if raw_value is not None else None
+            if normalized_key is not None and mapping.value_map:
+                raw_value = mapping.value_map.get(normalized_key, raw_value)
+            value = _apply_transform(raw_value, mapping.transform)
+            if not payload_config.drop_null_fields or value is not None:
+                nested_payload[nested_key] = value
+        payload[target_field] = nested_payload
+
     missing = [field for field in payload_config.required_fields if payload.get(field) in (None, "")]
     if missing:
         raise ValueError(f"Missing required payload fields: {', '.join(missing)}")

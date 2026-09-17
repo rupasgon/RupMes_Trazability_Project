@@ -1,6 +1,6 @@
 # RupMes Production Gateway
 
-Configurable Windows/Linux gateway that reads industrial source data and pushes normalized events to RupMes through `POST /production-reports/ingest`.
+Configurable Windows/Linux gateway that reads industrial source data and pushes normalized production or routing-process events to RupMes.
 
 ## Purpose
 
@@ -14,6 +14,9 @@ Configurable Windows/Linux gateway that reads industrial source data and pushes 
 - `sql`
 - `mqtt`
 - `opcua`
+- `tcp` (JSON client or listener)
+- `modbus` (TCP and RTU)
+- `s7` (Siemens DB read-only)
 
 ## Supported SQL engines
 
@@ -30,6 +33,9 @@ Configurable Windows/Linux gateway that reads industrial source data and pushes 
 - Timestamp checkpointing with optional id/sequence tracking
 - Continuous service mode or one-shot mode
 - API delivery using `X-Client-Id` and `X-API-Key`
+- Dynamic routing-result delivery through `POST /routing-process-results/ingest`
+- Per-pipeline checkpoint modes for timestamp or PLC sequence tracking
+- Local `secrets.env` support for service-safe credential storage
 
 ## Structure
 
@@ -45,6 +51,8 @@ Configurable Windows/Linux gateway that reads industrial source data and pushes 
 - Linux bundle build: [linux/build-bundle.sh](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\build-bundle.sh)
 - Linux package build: [linux/build-package.sh](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\build-package.sh)
 - Linux service unit: [linux/rupmes-production-connector.service](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\linux\rupmes-production-connector.service)
+- Protocol configuration guide: [PROTOCOLS.md](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\PROTOCOLS.md)
+- Safe protocol templates: [templates](C:\Users\qpk1kx\Documents\RupMes_Trazability_Project\production_connector\templates)
 
 ## Install
 

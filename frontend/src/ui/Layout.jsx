@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { request } from "../api.js";
 
-const MASTER_ROUTES = ["lines", "cells", "models", "statuses"];
+const MASTER_ROUTES = ["lines", "cells", "models", "statuses", "routings"];
 const ADMIN_ROUTES = ["users", "roles", "integrations"];
 
 function NavGroup({ collapsed, label, isOpen, onToggle, children }) {
@@ -158,6 +158,10 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
                 <Link className={`nav-link sub-link ${active === "statuses" ? "active" : ""}`} to="/statuses" title={t("nav.statuses")}>
                   <span className="nav-icon">ST</span>
                   <span className="nav-text">{t("nav.statuses")}</span>
+                </Link>
+                <Link className={`nav-link sub-link ${active === "routings" ? "active" : ""}`} to="/routings" title={t("dashboard.routings")}>
+                  <span className="nav-icon">RT</span>
+                  <span className="nav-text">{t("dashboard.routings")}</span>
                 </Link>
               </NavGroup>
             </div>

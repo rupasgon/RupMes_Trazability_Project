@@ -36,13 +36,20 @@ class SqlSourceAdapter(BaseSourceAdapter):
                     "limit": self.config.batch_size,
                 }
                 rows = connection.execute(text(self.config.query), params).mappings().all()
-                return [dict(row) for row in rows]
+                return [self.attach_received_timestamp(dict(row)) for row in rows]
 
             table = self._get_table()
             date_column = table.c[self.config.date_field]
             stmt = select(table)
 
-            if self.config.id_field:
+            if self.config.checkpoint_mode == "sequence":
+                if not self.config.id_field:
+                    raise ValueError("source.id_field is required for sequence checkpoints")
+                id_column = table.c[self.config.id_field]
+                if checkpoint.last_id is not None:
+                    stmt = stmt.where(id_column > checkpoint.last_id)
+                stmt = stmt.order_by(id_column.asc())
+            elif self.config.id_field:
                 id_column = table.c[self.config.id_field]
                 if checkpoint.last_id is not None:
                     stmt = stmt.where(
@@ -63,4 +70,4 @@ class SqlSourceAdapter(BaseSourceAdapter):
 
             stmt = stmt.limit(self.config.batch_size)
             rows = connection.execute(stmt).mappings().all()
-            return [dict(row) for row in rows]
+            return [self.attach_received_timestamp(dict(row)) for row in rows]

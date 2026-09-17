@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 
 from rupmes_connector.adapters import create_source_adapter
@@ -30,6 +31,7 @@ class ProductionBridgeService:
             self.checkpoint,
             self.config.source.date_field,
             self.config.source.id_field,
+            self.config.source.checkpoint_mode,
         ):
             return False
 
@@ -97,8 +99,26 @@ class MultiPipelineRunner:
     def run_forever(self) -> None:
         for service in self.services:
             LOGGER.info("Starting pipeline %s (%s)", service.config.name, service.config.source.type)
+
+        streaming_services = [service for service in self.services if getattr(service.adapter, "supports_streaming", False)]
+        polling_services = [service for service in self.services if service not in streaming_services]
+
+        for service in streaming_services:
+            thread = threading.Thread(
+                target=self._run_streaming_service,
+                args=(service,),
+                name=f"rupmes-{service.config.name}",
+                daemon=True,
+            )
+            thread.start()
+
+        if not polling_services:
+            # Keep the main process alive while listener/MQTT threads receive events.
+            while True:
+                time.sleep(3600)
+
         while True:
-            for service in self.services:
+            for service in polling_services:
                 try:
                     processed = service.run_once()
                     LOGGER.info("[%s] Cycle completed. Rows transferred: %s", service.config.name, processed)
@@ -106,5 +126,14 @@ class MultiPipelineRunner:
                     LOGGER.exception("[%s] Bridge cycle failed: %s", service.config.name, exc)
                     if service.config.runtime.stop_on_error:
                         raise
-            sleep_for = min(service.config.runtime.poll_interval_seconds for service in self.services)
+            sleep_for = min(service.config.runtime.poll_interval_seconds for service in polling_services)
             time.sleep(sleep_for)
+
+    @staticmethod
+    def _run_streaming_service(service: ProductionBridgeService) -> None:
+        try:
+            service.run_forever()
+        except Exception as exc:  # pragma: no cover - defensive service wrapper
+            LOGGER.exception("[%s] Streaming pipeline stopped: %s", service.config.name, exc)
+            if service.config.runtime.stop_on_error:
+                raise

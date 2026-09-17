@@ -9,6 +9,8 @@ Portal MES con backend FastAPI, frontend React/Vite y esquema PostgreSQL para tr
 - Migraciones Alembic: `alembic/`
 - Frontend portal: `frontend/`
 - Conector industrial externo: `production_connector/`
+- Despliegue Kubernetes/Helm: `deploy/helm/rupmes/`
+- Manual operativo editable: `Documentation/Manual_Operacion_RupMes.odt`
 
 ## Estructura
 
@@ -134,6 +136,18 @@ RUN_DB_SEED=true
 ```bash
 docker compose up --build
 ```
+
+### Prueba local aislada
+
+Si `.env` apunta a una base externa, no lo reutilices para pruebas. En PowerShell crea un archivo local y arranca un proyecto Compose separado:
+
+```powershell
+Copy-Item .env.local.example .env.local
+$env:ENV_FILE = ".env.local"
+docker compose --env-file .env.local -p rupmes-local up --build
+```
+
+Esto crea una base PostgreSQL local, aplica las migraciones y carga los datos iniciales. El portal queda en `http://localhost:18080`; el usuario inicial es `admin` y la contraseña es `admin123`.
 
 ### URLs
 

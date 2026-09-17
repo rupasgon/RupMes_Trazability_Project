@@ -30,6 +30,6 @@ class OpcUaSourceAdapter(BaseSourceAdapter):
                     trigger_value = await trigger_node.read_value()
                     if self.config.trigger_value is not None and trigger_value != self.config.trigger_value:
                         return []
-                return [row]
+                return [self.attach_received_timestamp(row)]
 
         return asyncio.run(_read_once())

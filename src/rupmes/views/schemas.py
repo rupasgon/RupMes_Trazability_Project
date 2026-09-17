@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -85,11 +85,13 @@ class UserRead(BaseModel):
 class RoutingCreate(BaseModel):
     routing_id: str = Field(..., max_length=50)
     description_routing: str = Field(..., max_length=50)
+    line_id: str = Field(..., min_length=1, max_length=50)
 
 
 class RoutingRead(BaseModel):
     routing_id: str
     description_routing: str
+    line_id: str | None = None
     create_date: datetime
 
 
@@ -129,6 +131,103 @@ class UserSelfUpdate(BaseModel):
 
 class RoutingUpdate(BaseModel):
     description_routing: Optional[str] = Field(None, max_length=50)
+    line_id: Optional[str] = Field(None, min_length=1, max_length=50)
+
+
+ResultValueType = Literal["text", "number", "integer", "boolean", "select", "date", "datetime"]
+RoutingExecutionResult = Literal["OK", "NOK", "SKIPPED"]
+
+
+class RoutingResultField(BaseModel):
+    code: str = Field(..., min_length=1, max_length=50, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    label: str = Field(..., min_length=1, max_length=100)
+    type: ResultValueType
+    required: bool = False
+    allowed_values: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("allowed_values")
+    @classmethod
+    def validate_allowed_values(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("Allowed values must be unique")
+        return value
+
+
+class RoutingProcessCreate(BaseModel):
+    process_id: str = Field(..., min_length=1, max_length=50)
+    description: str = Field(..., min_length=1, max_length=150)
+    cell_id: str = Field(..., min_length=1, max_length=50)
+    sequence: int = Field(..., ge=1)
+    is_required: bool = True
+    result_schema: list[RoutingResultField] = Field(default_factory=list, max_length=50)
+
+    @field_validator("result_schema")
+    @classmethod
+    def validate_result_schema(cls, value: list[RoutingResultField]) -> list[RoutingResultField]:
+        codes = [field.code for field in value]
+        if len(codes) != len(set(codes)):
+            raise ValueError("Result field codes must be unique per process")
+        for field in value:
+            if field.type == "select" and not field.allowed_values:
+                raise ValueError(f"Select field '{field.code}' requires allowed_values")
+            if field.type != "select" and field.allowed_values:
+                raise ValueError(f"Only select fields can declare allowed_values")
+        return value
+
+
+class RoutingProcessUpdate(BaseModel):
+    description: str | None = Field(None, min_length=1, max_length=150)
+    cell_id: str | None = Field(None, min_length=1, max_length=50)
+    sequence: int | None = Field(None, ge=1)
+    is_required: bool | None = None
+    result_schema: list[RoutingResultField] | None = Field(None, max_length=50)
+
+
+class RoutingProcessRead(RoutingProcessCreate):
+    routing_id: str
+    create_date: datetime
+
+
+class RoutingModelCreate(BaseModel):
+    model_id: str = Field(..., min_length=1, max_length=50)
+    routing_id: str = Field(..., min_length=1, max_length=50)
+    is_active: bool = True
+
+
+class RoutingModelUpdate(BaseModel):
+    routing_id: str | None = Field(None, min_length=1, max_length=50)
+    is_active: bool | None = None
+
+
+class RoutingModelRead(RoutingModelCreate):
+    create_date: datetime
+
+
+class RoutingDefinitionRead(RoutingRead):
+    processes: list[RoutingProcessRead] = []
+    models: list[RoutingModelRead] = []
+
+
+class RoutingProcessResultCreate(BaseModel):
+    model_id: str = Field(..., min_length=1, max_length=50)
+    serial_number: str = Field(..., min_length=1, max_length=150)
+    process_id: str = Field(..., min_length=1, max_length=50)
+    result: RoutingExecutionResult
+    result_values: dict[str, Any] = Field(default_factory=dict)
+    process_datetime: datetime
+    source_system: str | None = Field(None, max_length=100)
+    plant_code: str | None = Field(None, max_length=50)
+    line_code: str | None = Field(None, max_length=50)
+    station_code: str | None = Field(None, max_length=50)
+    machine_code: str | None = Field(None, max_length=50)
+
+
+class RoutingProcessResultRead(RoutingProcessResultCreate):
+    id: int
+    routing_id: str
+    cell_id: str
+    result_schema: list[RoutingResultField] = []
+    created_at: datetime
 
 
 class LineCreate(BaseModel):

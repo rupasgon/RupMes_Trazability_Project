@@ -1,0 +1,77 @@
+nameOverride: ""
+fullnameOverride: ""
+
+images:
+  backend:
+    repository: ghcr.io/your-org/rupmes-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: ghcr.io/your-org/rupmes-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+frontend:
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 80
+  runtimeConfig:
+    apiUrl: "https://api-rupmes.example.local"
+    tenantId: ""
+    csrfCookieName: rupmes_csrf
+    defaultLang: es
+  resources: {}
+
+backend:
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8011
+  env:
+    waitForDbOnStartup: true
+    waitForDbTimeout: 60
+    runDbMigrations: false
+    runDbSeed: false
+    frontendOrigins: "https://rupmes.example.local"
+    cookieSecure: true
+    cookieSameSite: lax
+    sessionTtlMinutes: 480
+    sessionCookieName: rupmes_session
+    csrfCookieName: rupmes_csrf
+    multiTenantEnabled: false
+    defaultTenantId: DEFAULT
+    productionIngestApiKey: change-this-ingest-key
+  resources: {}
+
+database:
+  external:
+    enabled: true
+    url: "postgresql+psycopg2://user:password@postgres.example.local:5432/mes_db"
+  internal:
+    enabled: false
+    image: postgres:16
+    user: rupmes
+    password: rupmes
+    db: mes_db
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClassName: ""
+
+migrationJob:
+  enabled: true
+  seed: false
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  frontendHost: rupmes.example.local
+  backendHost: api-rupmes.example.local
+  tls:
+    enabled: false
+    frontendSecretName: ""
+    backendSecretName: ""
