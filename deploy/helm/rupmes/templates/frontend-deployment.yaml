@@ -32,6 +32,8 @@ spec:
               value: {{ .Values.frontend.runtimeConfig.csrfCookieName | quote }}
             - name: VITE_DEFAULT_LANG
               value: {{ .Values.frontend.runtimeConfig.defaultLang | quote }}
+            - name: VITE_APP_VERSION
+              value: {{ default .Values.images.frontend.tag .Values.frontend.runtimeConfig.appVersion | quote }}
           livenessProbe:
             httpGet:
               path: /

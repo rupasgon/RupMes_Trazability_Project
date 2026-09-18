@@ -12,6 +12,7 @@ from rupmes.controllers.user_tenants_controller import list_user_tenants
 from rupmes.controllers.users_controller import get_user
 from rupmes.core.config import (
     get_cookie_samesite,
+    get_cookie_domain,
     get_cookie_secure,
     get_csrf_cookie_name,
     get_production_ingest_api_key,
@@ -165,6 +166,7 @@ def login(payload: LoginRequest, response: Response, request: Request, db: Sessi
     session_row = create_user_session(db, user.id_user, user_agent=user_agent, ip_address=ip_address)
 
     max_age = get_session_ttl_minutes() * 60
+    cookie_domain = get_cookie_domain()
     response.set_cookie(
         key=get_session_cookie_name(),
         value=session_row.session_id,
@@ -173,6 +175,7 @@ def login(payload: LoginRequest, response: Response, request: Request, db: Sessi
         samesite=get_cookie_samesite(),
         max_age=max_age,
         path="/",
+        domain=cookie_domain,
     )
     response.set_cookie(
         key=get_csrf_cookie_name(),
@@ -182,6 +185,7 @@ def login(payload: LoginRequest, response: Response, request: Request, db: Sessi
         samesite=get_cookie_samesite(),
         max_age=max_age,
         path="/",
+        domain=cookie_domain,
     )
 
     role_ids = _get_user_role_ids(db, user.id_user)
@@ -204,8 +208,9 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     db.delete(session_row)
     db.commit()
 
-    response.delete_cookie(get_session_cookie_name(), path="/")
-    response.delete_cookie(get_csrf_cookie_name(), path="/")
+    cookie_domain = get_cookie_domain()
+    response.delete_cookie(get_session_cookie_name(), path="/", domain=cookie_domain)
+    response.delete_cookie(get_csrf_cookie_name(), path="/", domain=cookie_domain)
     return None
 
 

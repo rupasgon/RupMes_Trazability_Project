@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from rupmes.models import RoutingModel, RoutingProcess, RoutingProcessResult
+from rupmes.models import RoutingModel, RoutingProcess, RoutingProcessResult, TraceabilityMeasurement
 
 from .base import BaseRepository
 
@@ -52,6 +52,9 @@ class RoutingExecutionRepository(BaseRepository):
     def add_result(self, row: RoutingProcessResult) -> RoutingProcessResult:
         self.session.add(row)
         return row
+
+    def add_measurements(self, rows: list[TraceabilityMeasurement]) -> None:
+        self.session.add_all(rows)
 
     def list_results(self, serial_number: str, tenant_id: str) -> list[RoutingProcessResult]:
         stmt = (

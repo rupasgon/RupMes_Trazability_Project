@@ -547,6 +547,18 @@ body {
   gap: 6px 8px;
 }
 
+.sidebar-version {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
 .sidebar-meta-grid > :only-child {
   grid-column: 1 / -1;
 }

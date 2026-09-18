@@ -36,6 +36,8 @@ spec:
                   key: PRODUCTION_INGEST_API_KEY
             - name: BACKEND_PORT
               value: {{ .Values.backend.service.port | quote }}
+            - name: APP_VERSION
+              value: {{ .Values.images.backend.tag | quote }}
             - name: WAIT_FOR_DB_ON_STARTUP
               value: {{ .Values.backend.env.waitForDbOnStartup | quote }}
             - name: WAIT_FOR_DB_TIMEOUT
@@ -50,6 +52,8 @@ spec:
               value: {{ .Values.backend.env.cookieSecure | quote }}
             - name: COOKIE_SAMESITE
               value: {{ .Values.backend.env.cookieSameSite | quote }}
+            - name: COOKIE_DOMAIN
+              value: {{ .Values.backend.env.cookieDomain | quote }}
             - name: SESSION_TTL_MINUTES
               value: {{ .Values.backend.env.sessionTtlMinutes | quote }}
             - name: SESSION_COOKIE_NAME

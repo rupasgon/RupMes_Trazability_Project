@@ -143,6 +143,8 @@ class RoutingResultField(BaseModel):
     label: str = Field(..., min_length=1, max_length=100)
     type: ResultValueType
     required: bool = False
+    reportable: bool = False
+    unit: str | None = Field(None, max_length=30)
     allowed_values: list[str] = Field(default_factory=list, max_length=100)
 
     @field_validator("allowed_values")

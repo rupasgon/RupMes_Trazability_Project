@@ -405,6 +405,38 @@ class RoutingProcessResult(Base):
     )
 
 
+class TraceabilityMeasurement(Base):
+    """Report-ready values extracted atomically from a routing process result."""
+
+    __tablename__ = "traceability_measurements"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), Identity(), primary_key=True)
+    event_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("routing_process_results.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False)
+    serial_number: Mapped[str] = mapped_column(String(150), nullable=False)
+    model_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    routing_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    process_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    cell_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    result: Mapped[str] = mapped_column(String(20), nullable=False)
+    measurement_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    measurement_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    numeric_value: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    text_value: Mapped[str | None] = mapped_column(Text)
+    boolean_value: Mapped[bool | None] = mapped_column(Boolean)
+    datetime_value: Mapped[datetime | None] = mapped_column(DateTime)
+    unit: Mapped[str | None] = mapped_column(String(30))
+    process_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("event_id", "measurement_code", name="uq_traceability_measurement_event_code"),
+        Index("ix_traceability_measurement_tenant_process_code", "tenant_id", "process_id", "measurement_code"),
+        Index("ix_traceability_measurement_tenant_serial", "tenant_id", "serial_number"),
+        Index("ix_traceability_measurement_tenant_datetime", "tenant_id", "process_datetime"),
+    )
+
+
 class ProductionReport(Base):
     __tablename__ = "production_report"
 

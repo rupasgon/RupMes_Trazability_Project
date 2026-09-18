@@ -45,6 +45,7 @@ services:
       VITE_TENANT_ID: ${VITE_TENANT_ID:-}
       VITE_CSRF_COOKIE_NAME: ${VITE_CSRF_COOKIE_NAME:-rupmes_csrf}
       VITE_DEFAULT_LANG: ${VITE_DEFAULT_LANG:-es}
+      VITE_APP_VERSION: ${VITE_APP_VERSION:-development}
     ports:
       - "${FRONTEND_PORT:-8080}:80"
     depends_on:

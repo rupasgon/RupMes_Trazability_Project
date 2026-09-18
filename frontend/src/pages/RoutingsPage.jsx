@@ -5,7 +5,7 @@ import { request } from "../api.js";
 const emptyRoute = { routing_id: "", description_routing: "", line_id: "" };
 const emptyProcess = { process_id: "", description: "", cell_id: "", sequence: 1, is_required: true, result_schema: [] };
 const emptyModel = { model_id: "", is_active: true };
-const emptyField = { code: "", label: "", type: "text", required: false, allowed_values: "" };
+const emptyField = { code: "", label: "", type: "text", required: false, reportable: true, unit: "", allowed_values: "" };
 
 export default function RoutingsPage({ auth, onLogout, tenantId, setTenantId, csrfToken, t, lang, setLang, theme, setTheme }) {
   const [routings, setRoutings] = useState([]);
@@ -76,6 +76,7 @@ export default function RoutingsPage({ auth, onLogout, tenantId, setTenantId, cs
     if (processForm.result_schema.some((field) => field.code === fieldForm.code.trim())) { setStatus("El código de campo ya existe en este proceso"); return; }
     const field = {
       code: fieldForm.code.trim(), label: fieldForm.label.trim(), type: fieldForm.type, required: fieldForm.required,
+      reportable: fieldForm.reportable, unit: fieldForm.unit.trim() || null,
       allowed_values: fieldForm.type === "select" ? fieldForm.allowed_values.split(",").map((value) => value.trim()).filter(Boolean) : [],
     };
     setProcessForm((current) => ({ ...current, result_schema: [...current.result_schema, field] }));

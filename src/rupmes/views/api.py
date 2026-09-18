@@ -88,7 +88,7 @@ from rupmes.controllers.users_controller import (
 )
 from rupmes.controllers.user_roles_controller import list_user_roles, replace_user_roles
 from rupmes.controllers.user_tenants_controller import list_user_tenants, replace_user_tenants
-from rupmes.core.config import get_default_tenant_id, get_frontend_origins, is_multi_tenant_enabled
+from rupmes.core.config import get_app_version, get_default_tenant_id, get_frontend_origins, is_multi_tenant_enabled
 from rupmes.core.deps import get_db
 from rupmes.core.i18n import get_lang, translate_error, translate_validation
 from rupmes.core.tenant import resolve_tenant_id
@@ -108,7 +108,7 @@ from rupmes.models import (
     TbTenants,
     TbUsers,
 )
-from rupmes.models import ProductionIngestClient
+from rupmes.models import ProductionIngestClient, TraceabilityMeasurement
 from rupmes.services.security import hash_password
 from rupmes.views.auth import (
     get_current_session,
@@ -348,6 +348,41 @@ def _validate_result_values(process: RoutingProcess, result: str, values: dict) 
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Result field '{code}' must be an ISO datetime")
 
 
+def _build_traceability_measurements(process: RoutingProcess, payload: RoutingProcessResultCreate, routing_id: str, cell_id: str, tenant_id: str) -> list[TraceabilityMeasurement]:
+    measurements: list[TraceabilityMeasurement] = []
+    for field in process.result_schema or []:
+        code = field["code"]
+        value = payload.result_values.get(code)
+        if not field.get("reportable") or value is None:
+            continue
+        measurement = TraceabilityMeasurement(
+            event_id=0,
+            tenant_id=tenant_id,
+            serial_number=payload.serial_number,
+            model_id=payload.model_id,
+            routing_id=routing_id,
+            process_id=payload.process_id,
+            cell_id=cell_id,
+            result=payload.result,
+            measurement_code=code,
+            measurement_type=field["type"],
+            unit=field.get("unit"),
+            process_datetime=payload.process_datetime,
+        )
+        if field["type"] in ("number", "integer"):
+            measurement.numeric_value = float(value)
+        elif field["type"] == "boolean":
+            measurement.boolean_value = value
+        elif field["type"] == "datetime":
+            measurement.datetime_value = datetime.fromisoformat(value)
+        elif field["type"] == "date":
+            measurement.datetime_value = datetime.combine(date.fromisoformat(value), time.min)
+        else:
+            measurement.text_value = str(value)
+        measurements.append(measurement)
+    return measurements
+
+
 def _serialize_tenant(row: TbTenants) -> TenantRead:
     return TenantRead(
         tenant_id=row.tenant_id,
@@ -384,6 +419,11 @@ def _serialize_user(db: Session, row: TbUsers) -> UserRead:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/version")
+def version():
+    return {"version": get_app_version()}
 
 
 @app.get("/portal-settings", response_model=PortalSettingsRead)
@@ -1747,4 +1787,5 @@ def ingest_routing_process_result_endpoint(payload: RoutingProcessResultCreate, 
         process_datetime=payload.process_datetime,
         source_system=payload.source_system,
     )
-    return _serialize_routing_process_result(create_routing_process_result(db, row))
+    measurements = _build_traceability_measurements(process, payload, model.routing_id, process.cell_id, tenant_id)
+    return _serialize_routing_process_result(create_routing_process_result(db, row, measurements))

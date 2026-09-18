@@ -21,6 +21,7 @@ frontend:
     tenantId: ""
     csrfCookieName: rupmes_csrf
     defaultLang: es
+    appVersion: ""
   resources: {}
 
 backend:
@@ -36,6 +37,7 @@ backend:
     frontendOrigins: "https://rupmes.example.local"
     cookieSecure: true
     cookieSameSite: lax
+    cookieDomain: ""
     sessionTtlMinutes: 480
     sessionCookieName: rupmes_session
     csrfCookieName: rupmes_csrf

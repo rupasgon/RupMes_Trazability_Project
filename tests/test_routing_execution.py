@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from rupmes.models import Base, ProductionIngestClient, RoutingModel, RoutingProcess, TbCells, TbLines, TbModels, TbRoutings, TbTenants
+from rupmes.models import Base, ProductionIngestClient, RoutingModel, RoutingProcess, TbCells, TbLines, TbModels, TbRoutings, TbTenants, TraceabilityMeasurement
 from rupmes.services.security import hash_password
 from rupmes.views.api import app, get_db
 
@@ -50,7 +50,7 @@ def _seed(session):
             is_required=True,
             tenant_id="TENANT_A",
             result_schema=[
-                {"code": "torque_nm", "label": "Torque", "type": "number", "required": True, "allowed_values": []},
+                {"code": "torque_nm", "label": "Torque", "type": "number", "required": True, "reportable": True, "unit": "Nm", "allowed_values": []},
                 {"code": "program", "label": "Program", "type": "select", "required": True, "allowed_values": ["P1", "P2"]},
             ],
         )
@@ -96,6 +96,11 @@ def test_ingest_routing_process_result_with_dynamic_values():
     assert body["routing_id"] == "ROUTE_A"
     assert body["cell_id"] == "CELL-A"
     assert body["result_values"] == {"torque_nm": 12.6, "program": "P1"}
+    with session_local() as session:
+        measurement = session.query(TraceabilityMeasurement).one()
+        assert measurement.measurement_code == "torque_nm"
+        assert float(measurement.numeric_value) == 12.6
+        assert measurement.unit == "Nm"
 
 
 def test_ingest_rejects_values_outside_process_schema():

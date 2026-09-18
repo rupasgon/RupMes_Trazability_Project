@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { request } from "../api.js";
+import { getRuntimeConfig } from "../runtime-config.js";
 
 const MASTER_ROUTES = ["lines", "cells", "models", "statuses", "routings"];
 const ADMIN_ROUTES = ["users", "roles", "integrations"];
@@ -35,6 +36,8 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("rupmes_sidebar") === "collapsed");
   const [branding, setBranding] = useState({ portal_title: "RupMes", logo_image: null });
   const [tenants, setTenants] = useState([]);
+  const frontendVersion = getRuntimeConfig("VITE_APP_VERSION", "development");
+  const [apiVersion, setApiVersion] = useState("unavailable");
   const [openGroups, setOpenGroups] = useState({
     masters: MASTER_ROUTES.includes(active),
     admin: ADMIN_ROUTES.includes(active),
@@ -85,6 +88,12 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
 
     loadTenants().catch(() => {});
   }, [currentTenant, auth.id_user]);
+
+  useEffect(() => {
+    request("/version")
+      .then((data) => setApiVersion(data.version || "unavailable"))
+      .catch(() => setApiVersion("unavailable"));
+  }, []);
 
   return (
     <div className={`app-shell ${collapsed ? "collapsed" : ""}`}>
@@ -255,6 +264,10 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
                     <option value="light">{t("theme.light")}</option>
                   </select>
                 </div>
+              </div>
+              <div className="sidebar-version" title={`Web ${frontendVersion} | API ${apiVersion}`}>
+                <span>Web {frontendVersion}</span>
+                <span>API {apiVersion}</span>
               </div>
             </div>
           </div>

@@ -39,6 +39,18 @@ def _login_admin(client: TestClient) -> str:
     return client.cookies["rupmes_csrf"]
 
 
+def test_login_sets_shared_cookie_domain(monkeypatch):
+    monkeypatch.setenv("COOKIE_DOMAIN", ".merit-automotive.com")
+    client, _session_factory = _make_client()
+
+    response = client.post("/auth/login", json={"id_user": "admin", "password": "admin123"})
+
+    assert response.status_code == 200
+    cookies = response.headers.get_list("set-cookie")
+    assert len(cookies) == 2
+    assert all("domain=.merit-automotive.com" in cookie.lower() for cookie in cookies)
+
+
 def test_create_and_traceability_production_report():
     client, _session_factory = _make_client()
     csrf_token = _login_admin(client)

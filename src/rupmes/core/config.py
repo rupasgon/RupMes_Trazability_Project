@@ -28,6 +28,11 @@ def get_cookie_samesite() -> str:
     return os.getenv("COOKIE_SAMESITE", "lax")
 
 
+def get_cookie_domain() -> str | None:
+    value = os.getenv("COOKIE_DOMAIN", "").strip()
+    return value or None
+
+
 def get_session_ttl_minutes() -> int:
     value = os.getenv("SESSION_TTL_MINUTES", "480")
     try:
@@ -42,6 +47,10 @@ def get_session_cookie_name() -> str:
 
 def get_csrf_cookie_name() -> str:
     return os.getenv("CSRF_COOKIE_NAME", "rupmes_csrf")
+
+
+def get_app_version() -> str:
+    return os.getenv("APP_VERSION", "development").strip() or "development"
 
 
 def get_default_tenant_id() -> str:

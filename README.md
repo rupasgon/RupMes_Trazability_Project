@@ -255,6 +255,7 @@ Importante:
 - `FRONTEND_ORIGINS`: orígenes permitidos por CORS para el navegador
 - `COOKIE_SECURE`: usa cookies seguras solo para HTTPS
 - `COOKIE_SAMESITE`: política de cookies
+- `COOKIE_DOMAIN`: dominio compartido de cookies; déjelo vacío en local y use `.merit-automotive.com` si el portal y la API están en subdominios distintos
 - `SESSION_COOKIE_NAME`: nombre de cookie de sesión
 - `CSRF_COOKIE_NAME`: nombre de cookie CSRF
 

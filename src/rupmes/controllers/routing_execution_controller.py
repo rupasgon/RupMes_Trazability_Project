@@ -57,9 +57,13 @@ def delete_routing_model(session: Session, row):
     session.commit()
 
 
-def create_routing_process_result(session: Session, row):
+def create_routing_process_result(session: Session, row, measurements=None):
     repo = RoutingExecutionRepository(session)
     repo.add_result(row)
+    session.flush()
+    for measurement in measurements or []:
+        measurement.event_id = row.id
+    repo.add_measurements(measurements or [])
     session.commit()
     session.refresh(row)
     return row
