@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 SourceType = Literal["sql", "mqtt", "opcua", "tcp", "modbus", "s7"]
 CheckpointMode = Literal["datetime", "sequence"]
 TimestampSource = Literal["source", "received_at"]
+PipelineKind = Literal["production_report", "wip_oracle"]
 
 ENV_REFERENCE = re.compile(r"^\$\{ENV:([A-Za-z_][A-Za-z0-9_]*)\}$")
 
@@ -50,6 +51,49 @@ class ApiConfig(BaseModel):
     api_key: str
     timeout_seconds: int = 30
     verify_tls: bool = True
+
+
+class OracleApexConfig(BaseModel):
+    """OAuth and delivery contract used by the existing TcpToApexBridge."""
+
+    base_url: str
+    endpoint: str = "/scm/workOrderLine"
+    token_url: str
+    client_id: str
+    client_secret: str
+    timeout_seconds: int = Field(default=30, ge=1, le=300)
+    verify_tls: bool = True
+    duplicate_message: str = (
+        "Error: ORA-00001: unique constraint (APPS.WO_PACK_FILE_LINE_CON) violated"
+    )
+    token_refresh_buffer_seconds: int = Field(default=60, ge=0, le=3600)
+
+
+class WipOracleConfig(BaseModel):
+    """Business rules for grouping WIP records into durable Oracle lots."""
+
+    state_db_path: str
+    service_id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
+    lot_prefix: str = Field(min_length=1, max_length=80)
+    lot_mask: str = "{prefix}-{service}-{date:%Y%m%d}-{sequence:06d}"
+    timezone: str = "Europe/Madrid"
+    sequence_scope: Literal["daily", "global"] = "daily"
+    reconciliation_hours: int = Field(default=48, ge=1, le=168)
+    production_mode_field: str = "ProductionMode"
+    production_mode_value: str = "Produccion"
+    status_field: str = "Status"
+    accepted_status: str = "OK"
+    model_field: str = "MPN"
+    piece_key_field: str = "ST34_P100DM"
+    external_type: str
+    organization_id: str
+
+    @model_validator(mode="after")
+    def validate_lot_mask(self) -> "WipOracleConfig":
+        required = ("{prefix}", "{service}", "{date", "{sequence")
+        if any(token not in self.lot_mask for token in required):
+            raise ValueError("wip_oracle.lot_mask must include prefix, service, date, and sequence")
+        return self
 
 
 class SourceConfig(BaseModel):
@@ -205,12 +249,31 @@ class RuntimeConfig(BaseModel):
 
 
 class ConnectorConfig(BaseModel):
+    pipeline: PipelineKind = "production_report"
     name: str | None = None
-    api: ApiConfig
+    api: ApiConfig | None = None
     source: SourceConfig
-    payload: PayloadConfig
-    state: StateConfig
+    payload: PayloadConfig | None = None
+    state: StateConfig | None = None
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    oracle_apex: OracleApexConfig | None = None
+    wip_oracle: WipOracleConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_pipeline(self) -> "ConnectorConfig":
+        if self.pipeline == "production_report":
+            if self.api is None or self.payload is None or self.state is None:
+                raise ValueError("api, payload, and state are required for production_report pipelines")
+        elif self.pipeline == "wip_oracle":
+            if self.source.type != "sql":
+                raise ValueError("wip_oracle pipelines require a sql source")
+            if self.oracle_apex is None or self.wip_oracle is None:
+                raise ValueError("oracle_apex and wip_oracle are required for wip_oracle pipelines")
+            if not self.source.table:
+                raise ValueError("wip_oracle pipelines require source.table")
+            if not self.source.id_field:
+                raise ValueError("wip_oracle pipelines require source.id_field")
+        return self
 
 
 def load_config(path: str | Path) -> ConnectorConfig:

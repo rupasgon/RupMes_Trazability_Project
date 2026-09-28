@@ -5,6 +5,7 @@ import logging
 
 from rupmes_connector.config import load_configs
 from rupmes_connector.service import MultiPipelineRunner, ProductionBridgeService
+from rupmes_connector.wip_oracle import WipOracleBridgeService
 
 
 def _configure_logging(level: str) -> None:
@@ -28,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if len(configs) == 1:
-        service = ProductionBridgeService(configs[0])
+        service = WipOracleBridgeService(configs[0]) if configs[0].pipeline == "wip_oracle" else ProductionBridgeService(configs[0])
         if args.command == "run-once":
             processed = service.run_once()
             print(f"Rows transferred: {processed}")

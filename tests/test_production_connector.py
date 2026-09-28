@@ -6,10 +6,11 @@ from rupmes_connector.adapters.modbus import ModbusSourceAdapter
 from rupmes_connector.adapters.s7 import S7SourceAdapter
 from rupmes_connector.adapters.tcp import TcpSourceAdapter
 from rupmes_connector.checkpoint import Checkpoint, load_checkpoint, save_checkpoint
-from rupmes_connector.config import ConnectorConfig, ModbusRegister, S7Variable, load_config
+from rupmes_connector.config import ConnectorConfig, ModbusRegister, S7Variable, WipOracleConfig, load_config
 from rupmes_connector.mapper import build_payload
 from rupmes_connector.tracking import is_newer_row
 from rupmes_connector.tracking import normalize_datetime
+from rupmes_connector.wip_oracle import WipStateStore
 
 
 def test_connector_config_parses():
@@ -179,3 +180,56 @@ def test_config_reads_connector_local_secrets(tmp_path, monkeypatch):
     config = load_config(tmp_path / "config.json")
     assert config.api.client_id == "LINE-A"
     assert config.api.api_key == "connector-key"
+
+
+def test_wip_outbox_deduplicates_pieces_and_serializes_daily_lots(tmp_path):
+    wip = WipOracleConfig(
+        state_db_path=str(tmp_path / "wip.db"),
+        service_id="WIPBPCS",
+        lot_prefix="ESSVIND-DCS-BMW",
+        external_type="ASSEMBLY",
+        organization_id="3",
+    )
+    store = WipStateStore(wip.state_db_path, wip, "Id", "Date")
+    rows = [
+        {"Id": 1, "Date": "2026-09-28 12:00:00", "MPN": "5004703F", "ST34_P100DM": "5004703F-20260928-1"},
+        {"Id": 2, "Date": "2026-09-28 12:00:01", "MPN": "5004703F", "ST34_P100DM": "5004703F-20260928-2"},
+    ]
+
+    first = store.reserve_lots(rows)
+    repeated = store.reserve_lots(rows)
+    second = store.reserve_lots([
+        {"Id": 3, "Date": "2026-09-28 12:00:02", "MPN": "5004704F", "ST34_P100DM": "5004704F-20260928-1"}
+    ])
+
+    assert first[0].payload == {
+        "item": "5004703F", "lot": "ESSVIND-DCS-BMW-WIPBPCS-20260928-000001",
+        "external_type": "ASSEMBLY", "quantity": "2", "organization_id": "3",
+    }
+    assert repeated == []
+    assert second[0].lot_id == "ESSVIND-DCS-BMW-WIPBPCS-20260928-000002"
+    assert len(store.pending_lots()) == 2
+    store.close()
+
+
+def test_wip_oracle_config_does_not_require_legacy_rupmes_api():
+    config = ConnectorConfig.model_validate(
+        {
+            "pipeline": "wip_oracle",
+            "source": {
+                "connection_url": "mysql+pymysql://reader:pass@localhost:3306/mes",
+                "table": "bmw_szl_levers_results_assy", "date_field": "Date", "id_field": "Id",
+            },
+            "oracle_apex": {
+                "base_url": "https://apex.example/ords/apps", "token_url": "https://apex.example/oauth/token",
+                "client_id": "client", "client_secret": "secret",
+            },
+            "wip_oracle": {
+                "state_db_path": "state/wip.db", "service_id": "WIPBPCS", "lot_prefix": "ESSVIND",
+                "external_type": "ASSEMBLY", "organization_id": "3",
+            },
+        }
+    )
+
+    assert config.api is None
+    assert config.wip_oracle.piece_key_field == "ST34_P100DM"

@@ -1,0 +1,45 @@
+{
+  "name": "bmw-wip-oracle",
+  "pipeline": "wip_oracle",
+  "source": {
+    "type": "sql",
+    "connection_url": "${ENV:RUPMES_SOURCE_DATABASE_URL}",
+    "table": "bmw_szl_levers_results_assy",
+    "date_field": "Date",
+    "id_field": "Id",
+    "batch_size": 500
+  },
+  "oracle_apex": {
+    "base_url": "${ENV:ORACLE_APEX_BASE_URL}",
+    "endpoint": "/scm/workOrderLine",
+    "token_url": "${ENV:ORACLE_APEX_TOKEN_URL}",
+    "client_id": "${ENV:ORACLE_APEX_CLIENT_ID}",
+    "client_secret": "${ENV:ORACLE_APEX_CLIENT_SECRET}",
+    "timeout_seconds": 30,
+    "verify_tls": true
+  },
+  "wip_oracle": {
+    "state_db_path": "/opt/rupmes-production-connector/state/bmw-wip-oracle.db",
+    "service_id": "WIPBPCS",
+    "lot_prefix": "ESSVIND-DCS-BMW",
+    "lot_mask": "{prefix}-{service}-{date:%Y%m%d}-{sequence:06d}",
+    "timezone": "Europe/Madrid",
+    "sequence_scope": "daily",
+    "reconciliation_hours": 48,
+    "production_mode_field": "ProductionMode",
+    "production_mode_value": "Produccion",
+    "status_field": "Status",
+    "accepted_status": "OK",
+    "model_field": "MPN",
+    "piece_key_field": "ST34_P100DM",
+    "external_type": "ASSEMBLY",
+    "organization_id": "${ENV:ORACLE_ORGANIZATION_ID}"
+  },
+  "runtime": {
+    "poll_interval_seconds": 30,
+    "log_level": "INFO",
+    "dry_run": true,
+    "stop_on_error": false,
+    "max_batches_per_cycle": 100
+  }
+}

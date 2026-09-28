@@ -10,6 +10,7 @@ from rupmes_connector.client import ApiClient
 from rupmes_connector.config import ConnectorConfig
 from rupmes_connector.mapper import build_payload
 from rupmes_connector.tracking import build_next_checkpoint, is_newer_row
+from rupmes_connector.wip_oracle import WipOracleBridgeService
 
 
 LOGGER = logging.getLogger("rupmes_connector")
@@ -17,6 +18,8 @@ LOGGER = logging.getLogger("rupmes_connector")
 
 class ProductionBridgeService:
     def __init__(self, config: ConnectorConfig):
+        if config.api is None or config.payload is None or config.state is None:
+            raise ValueError("ProductionBridgeService requires api, payload, and state configuration")
         self.config = config
         self.adapter = create_source_adapter(config.source)
         self.api_client = ApiClient(config.api)
@@ -88,7 +91,10 @@ class ProductionBridgeService:
 
 class MultiPipelineRunner:
     def __init__(self, configs: list[ConnectorConfig]):
-        self.services = [ProductionBridgeService(config) for config in configs]
+        self.services = [
+            WipOracleBridgeService(config) if config.pipeline == "wip_oracle" else ProductionBridgeService(config)
+            for config in configs
+        ]
 
     def run_once(self) -> int:
         total = 0
