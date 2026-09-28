@@ -1,9 +1,12 @@
 from datetime import date, datetime, time
 
+import httpx
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -108,8 +111,9 @@ from rupmes.models import (
     TbTenants,
     TbUsers,
 )
-from rupmes.models import ProductionIngestClient, TraceabilityMeasurement
+from rupmes.models import IntegrationDeliveryRule, IntegrationServer, ProductionIngestClient, TraceabilityMeasurement
 from rupmes.services.security import hash_password
+from rupmes.services.integration_credentials import decrypt_oauth_credentials, encrypt_oauth_credentials
 from rupmes.views.auth import (
     get_current_session,
     get_current_user,
@@ -156,6 +160,12 @@ from rupmes.views.schemas import (
     ProductionIngestClientCreate,
     ProductionIngestClientRead,
     ProductionIngestClientUpdate,
+    IntegrationDeliveryRuleCreate,
+    IntegrationDeliveryRuleRead,
+    IntegrationDeliveryRuleUpdate,
+    IntegrationServerCreate,
+    IntegrationServerRead,
+    IntegrationServerUpdate,
     ProductionReportCreate,
     ProductionReportRead,
     StatusCreate,
@@ -269,6 +279,63 @@ def _serialize_production_ingest_client(row: ProductionIngestClient) -> Producti
         source_system=row.source_system,
         is_active=row.is_active,
         created_at=row.created_at,
+    )
+
+
+def _serialize_integration_server(row: IntegrationServer) -> IntegrationServerRead:
+    return IntegrationServerRead(
+        id=row.id, server_id=row.server_id, description=row.description, protocol=row.protocol,
+        base_url=row.base_url, api_endpoint=row.api_endpoint, auth_type=row.auth_type, secret_ref=row.secret_ref,
+        credentials_configured=bool(row.credentials_encrypted),
+        token_url=row.token_url, oauth_scope=row.oauth_scope,
+        token_refresh_buffer_seconds=row.token_refresh_buffer_seconds,
+        timeout_seconds=row.timeout_seconds, verify_tls=row.verify_tls, is_active=row.is_active,
+        created_at=row.created_at,
+    )
+
+
+def _apply_integration_server_credentials(values: dict) -> dict:
+    """Keep OAuth credentials write-only and encrypted before they reach the database."""
+    client_id = (values.pop("oauth_client_id", None) or "").strip()
+    client_secret = values.pop("oauth_client_secret", None) or ""
+    if not client_id and not client_secret:
+        return values
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="OAuth client ID and secret must be provided together")
+    try:
+        values["credentials_encrypted"] = encrypt_oauth_credentials(client_id, client_secret)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    return values
+
+
+def _test_oauth_client_credentials(row: IntegrationServer) -> int | None:
+    if row.auth_type != "oauth2_client_credentials":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection test currently supports OAuth2 client credentials only")
+    if not row.token_url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth token URL is not configured")
+    try:
+        client_id, client_secret = decrypt_oauth_credentials(row.credentials_encrypted)
+        with httpx.Client(verify=row.verify_tls, timeout=row.timeout_seconds) as client:
+            response = client.post(row.token_url, data={"grant_type": "client_credentials", **({"scope": row.oauth_scope} if row.oauth_scope else {})}, auth=(client_id, client_secret))
+        response.raise_for_status()
+        body = response.json()
+        if not body.get("access_token"):
+            raise ValueError("Token endpoint did not return an access token")
+        return body.get("expires_in")
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OAuth connection test failed: {exc}") from exc
+
+
+def _serialize_integration_delivery_rule(row: IntegrationDeliveryRule, server: IntegrationServer) -> IntegrationDeliveryRuleRead:
+    return IntegrationDeliveryRuleRead(
+        id=row.id, rule_id=row.rule_id, description=row.description,
+        report_filter=row.report_filter or {}, mapping_config=row.mapping_config or {}, lot_mask=row.lot_mask,
+        server_id=row.server_id, server_code=server.server_id,
+        dispatch_interval_seconds=row.dispatch_interval_seconds, batch_size=row.batch_size,
+        max_retries=row.max_retries, is_active=row.is_active, created_at=row.created_at,
     )
 
 
@@ -676,6 +743,126 @@ def delete_production_ingest_client_endpoint(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production ingest client not found")
     delete_production_ingest_client(db, row)
+    return None
+
+
+@app.get("/integration-servers", response_model=list[IntegrationServerRead])
+def list_integration_servers_endpoint(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, _session = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = db.execute(select(IntegrationServer).where(IntegrationServer.tenant_id == tenant_id).order_by(IntegrationServer.server_id)).scalars().all()
+    return [_serialize_integration_server(row) for row in rows]
+
+
+@app.post("/integration-servers", response_model=IntegrationServerRead, status_code=status.HTTP_201_CREATED)
+def create_integration_server_endpoint(payload: IntegrationServerCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    values = _apply_integration_server_credentials(payload.model_dump())
+    row = IntegrationServer(tenant_id=require_tenant_access(request, user, db), **values)
+    try:
+        db.add(row); db.commit(); db.refresh(row)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Integration server already exists")
+    return _serialize_integration_server(row)
+
+
+@app.patch("/integration-servers/{server_id}", response_model=IntegrationServerRead)
+def update_integration_server_endpoint(server_id: str, payload: IntegrationServerUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = db.execute(select(IntegrationServer).where(IntegrationServer.tenant_id == tenant_id, IntegrationServer.server_id == server_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration server not found")
+    updates = _apply_integration_server_credentials(payload.model_dump(exclude_unset=True))
+    for field, value in updates.items():
+        setattr(row, field, value)
+    db.commit(); db.refresh(row)
+    return _serialize_integration_server(row)
+
+
+@app.post("/integration-servers/{server_id}/test")
+def test_integration_server_endpoint(server_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = db.execute(select(IntegrationServer).where(IntegrationServer.tenant_id == tenant_id, IntegrationServer.server_id == server_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration server not found")
+    expires_in = _test_oauth_client_credentials(row)
+    return {"ok": True, "message": "OAuth token obtained successfully", "expires_in": expires_in}
+
+
+@app.delete("/integration-servers/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_integration_server_endpoint(server_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = db.execute(select(IntegrationServer).where(IntegrationServer.tenant_id == tenant_id, IntegrationServer.server_id == server_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration server not found")
+    if db.execute(select(IntegrationDeliveryRule.id).where(IntegrationDeliveryRule.server_id == row.id).limit(1)).scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Integration server is used by a delivery rule")
+    db.delete(row); db.commit()
+    return None
+
+
+@app.get("/integration-delivery-rules", response_model=list[IntegrationDeliveryRuleRead])
+def list_integration_delivery_rules_endpoint(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, _session = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = db.execute(select(IntegrationDeliveryRule, IntegrationServer).join(IntegrationServer, IntegrationDeliveryRule.server_id == IntegrationServer.id).where(IntegrationDeliveryRule.tenant_id == tenant_id).order_by(IntegrationDeliveryRule.rule_id)).all()
+    return [_serialize_integration_delivery_rule(rule, server) for rule, server in rows]
+
+
+@app.post("/integration-delivery-rules", response_model=IntegrationDeliveryRuleRead, status_code=status.HTTP_201_CREATED)
+def create_integration_delivery_rule_endpoint(payload: IntegrationDeliveryRuleCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    server = db.execute(select(IntegrationServer).where(IntegrationServer.id == payload.server_id, IntegrationServer.tenant_id == tenant_id)).scalar_one_or_none()
+    if not server:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration server not found")
+    row = IntegrationDeliveryRule(tenant_id=tenant_id, **payload.model_dump())
+    try:
+        db.add(row); db.commit(); db.refresh(row)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Integration delivery rule already exists")
+    return _serialize_integration_delivery_rule(row, server)
+
+
+@app.patch("/integration-delivery-rules/{rule_id}", response_model=IntegrationDeliveryRuleRead)
+def update_integration_delivery_rule_endpoint(rule_id: str, payload: IntegrationDeliveryRuleUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = db.execute(select(IntegrationDeliveryRule).where(IntegrationDeliveryRule.tenant_id == tenant_id, IntegrationDeliveryRule.rule_id == rule_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration delivery rule not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "server_id" in updates:
+        server = db.execute(select(IntegrationServer).where(IntegrationServer.id == updates["server_id"], IntegrationServer.tenant_id == tenant_id)).scalar_one_or_none()
+        if not server:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration server not found")
+    for field, value in updates.items():
+        setattr(row, field, value)
+    db.commit(); db.refresh(row)
+    server = db.get(IntegrationServer, row.server_id)
+    return _serialize_integration_delivery_rule(row, server)
+
+
+@app.delete("/integration-delivery-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_integration_delivery_rule_endpoint(rule_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = db.execute(select(IntegrationDeliveryRule).where(IntegrationDeliveryRule.tenant_id == tenant_id, IntegrationDeliveryRule.rule_id == rule_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration delivery rule not found")
+    db.delete(row); db.commit()
     return None
 
 

@@ -63,3 +63,8 @@ def is_multi_tenant_enabled() -> bool:
 
 def get_production_ingest_api_key() -> str:
     return os.getenv("PRODUCTION_INGEST_API_KEY", "").strip()
+
+
+def get_integration_secrets_key() -> str:
+    """Return the deployment key used to encrypt ERP credentials at rest."""
+    return os.getenv("INTEGRATION_SECRETS_KEY", "").strip()

@@ -170,3 +170,78 @@ def test_item_create_and_get():
     assert create.status_code == 201
     get_one = client.get("/items/ITEM1")
     assert get_one.status_code == 200
+
+
+def test_integration_server_and_delivery_rule_crud(monkeypatch):
+    monkeypatch.setenv("INTEGRATION_SECRETS_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+    client, session_factory = _make_client()
+    with session_factory() as session:
+        _seed_minimum(session)
+        session.add(TbPermissions(permission_id="production.admin", description_permission="Manage integrations"))
+        session.add(TbRolePermissions(role_id="ADM", permission_id="production.admin"))
+        session.commit()
+    _authenticate(client)
+
+    client_row = client.post(
+        "/production-ingest-clients",
+        json={
+            "client_id": "BMW_WIP",
+            "description": "BMW WIP source",
+            "api_key": "test-key-1234567890",
+            "source_system": "BMW_WIP",
+        },
+    )
+    assert client_row.status_code == 201
+    client_toggle = client.patch("/production-ingest-clients/BMW_WIP", json={"is_active": False})
+    assert client_toggle.status_code == 200
+    assert client_toggle.json()["is_active"] is False
+
+    server = client.post(
+        "/integration-servers",
+        json={
+            "server_id": "ORACLE_BMW",
+            "description": "Oracle APEX BMW",
+            "protocol": "oracle_apex",
+            "base_url": "https://oracle.example/ords/apps",
+            "api_endpoint": "/scm/workOrderLine",
+            "auth_type": "oauth2_client_credentials",
+            "secret_ref": "ORACLE_BMW_OAUTH",
+            "oauth_client_id": "oracle-client",
+            "oauth_client_secret": "oracle-secret",
+            "token_url": "https://oracle.example/ords/apps/oauth/token",
+            "token_refresh_buffer_seconds": 60,
+        },
+    )
+    assert server.status_code == 201
+    assert server.json()["credentials_configured"] is True
+    assert "oauth_client_secret" not in server.json()
+    assert "oracle-secret" not in str(server.json())
+    server_id = server.json()["id"]
+    assert client.get("/integration-servers").json()[0]["server_id"] == "ORACLE_BMW"
+    server_update = client.patch("/integration-servers/ORACLE_BMW", json={"description": "Oracle APEX BMW updated", "timeout_seconds": 45})
+    assert server_update.status_code == 200
+    assert server_update.json()["timeout_seconds"] == 45
+    assert server_update.json()["token_url"] == "https://oracle.example/ords/apps/oauth/token"
+    assert server_update.json()["api_endpoint"] == "/scm/workOrderLine"
+
+    rule = client.post(
+        "/integration-delivery-rules",
+        json={
+            "rule_id": "BMW_OK_TO_ORACLE",
+            "description": "BMW OK reports to Oracle",
+            "report_filter": {"result": "OK"},
+            "mapping_config": {"item": "product_code", "quantity": "count"},
+            "lot_mask": "ESSVIND-DCS-BMW-{date}-{sequence}",
+            "server_id": server_id,
+        },
+    )
+    assert rule.status_code == 201
+    assert rule.json()["server_code"] == "ORACLE_BMW"
+    assert client.delete("/integration-servers/ORACLE_BMW").status_code == 409
+
+    rule_toggle = client.patch("/integration-delivery-rules/BMW_OK_TO_ORACLE", json={"is_active": False})
+    assert rule_toggle.status_code == 200
+    assert rule_toggle.json()["is_active"] is False
+    assert client.patch("/integration-delivery-rules/BMW_OK_TO_ORACLE", json={"dispatch_interval_seconds": 60}).status_code == 200
+    assert client.delete("/integration-delivery-rules/BMW_OK_TO_ORACLE").status_code == 204
+    assert client.delete("/integration-servers/ORACLE_BMW").status_code == 204

@@ -510,3 +510,66 @@ class ProductionIngestClient(Base):
         Index("ix_production_ingest_clients_client_id", "client_id"),
         Index("ix_production_ingest_clients_active", "is_active"),
     )
+
+
+class IntegrationServer(Base):
+    """Reusable outbound endpoint with encrypted credentials when authentication needs them."""
+
+    __tablename__ = "integration_servers"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), Identity(), primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(String(200), nullable=False)
+    protocol: Mapped[str] = mapped_column(String(30), nullable=False)
+    base_url: Mapped[str | None] = mapped_column(String(500))
+    api_endpoint: Mapped[str | None] = mapped_column(String(500))
+    auth_type: Mapped[str] = mapped_column(String(30), server_default=text("'none'"), nullable=False)
+    secret_ref: Mapped[str | None] = mapped_column(String(200))
+    credentials_encrypted: Mapped[str | None] = mapped_column(Text)
+    token_url: Mapped[str | None] = mapped_column(String(500))
+    oauth_scope: Mapped[str | None] = mapped_column(String(500))
+    token_refresh_buffer_seconds: Mapped[int] = mapped_column(Integer, server_default=text("60"), nullable=False)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, server_default=text("30"), nullable=False)
+    verify_tls: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("trim(server_id) <> ''", name="ck_integration_server_id_not_blank"),
+        CheckConstraint("trim(description) <> ''", name="ck_integration_server_description_not_blank"),
+        CheckConstraint("token_refresh_buffer_seconds >= 0", name="ck_integration_server_token_buffer_non_negative"),
+        CheckConstraint("timeout_seconds > 0", name="ck_integration_server_timeout_positive"),
+        UniqueConstraint("tenant_id", "server_id", name="uq_integration_server_tenant_server"),
+        Index("ix_integration_server_tenant", "tenant_id"),
+    )
+
+
+class IntegrationDeliveryRule(Base):
+    """How RupMes production reports are selected and delivered to one ERP endpoint."""
+
+    __tablename__ = "integration_delivery_rules"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), Identity(), primary_key=True)
+    rule_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(String(200), nullable=False)
+    report_filter: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    mapping_config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    lot_mask: Mapped[str | None] = mapped_column(String(250))
+    server_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("integration_servers.id"), nullable=False)
+    dispatch_interval_seconds: Mapped[int] = mapped_column(Integer, server_default=text("30"), nullable=False)
+    batch_size: Mapped[int] = mapped_column(Integer, server_default=text("100"), nullable=False)
+    max_retries: Mapped[int] = mapped_column(Integer, server_default=text("5"), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("trim(rule_id) <> ''", name="ck_integration_delivery_rule_id_not_blank"),
+        CheckConstraint("dispatch_interval_seconds > 0", name="ck_integration_delivery_rule_interval_positive"),
+        CheckConstraint("batch_size > 0", name="ck_integration_delivery_rule_batch_positive"),
+        CheckConstraint("max_retries >= 0", name="ck_integration_delivery_rule_retries_non_negative"),
+        UniqueConstraint("tenant_id", "rule_id", name="uq_integration_delivery_rule_tenant_rule"),
+        Index("ix_integration_delivery_rule_tenant", "tenant_id"),
+        Index("ix_integration_delivery_rule_server", "server_id"),
+    )

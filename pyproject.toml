@@ -12,6 +12,8 @@ dependencies = [
   "fastapi>=0.110",
   "uvicorn>=0.27",
   "pydantic>=2.6",
+  "cryptography>=42.0",
+  "httpx>=0.27",
   "email-validator>=2.1",
 ]
 

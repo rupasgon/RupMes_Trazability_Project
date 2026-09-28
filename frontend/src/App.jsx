@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 import RolesPage from "./pages/RolesPage.jsx";
 import IntegrationClientsPage from "./pages/IntegrationClientsPage.jsx";
+import IntegrationServersPage from "./pages/IntegrationServersPage.jsx";
 import ItemsPage from "./pages/ItemsPage.jsx";
 import LinesPage from "./pages/LinesPage.jsx";
 import CellsPage from "./pages/CellsPage.jsx";
@@ -183,6 +184,7 @@ export default function App() {
             )
           }
         />
+        <Route path="/integrations/servers" element={auth ? <IntegrationServersPage auth={auth} onLogout={handleLogout} tenantId={tenantId} setTenantId={setTenantId} csrfToken={csrfToken} t={t} lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} /> : <Navigate to="/login" replace />} />
         <Route
           path="/roles"
           element={

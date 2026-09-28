@@ -568,3 +568,104 @@ class ProductionIngestClientUpdate(BaseModel):
         if not cleaned:
             raise ValueError("Value cannot be empty")
         return cleaned
+
+
+class IntegrationServerCreate(BaseModel):
+    server_id: str = Field(..., max_length=100)
+    description: str = Field(..., max_length=200)
+    protocol: str = Field(..., max_length=30)
+    base_url: Optional[str] = Field(None, max_length=500)
+    api_endpoint: Optional[str] = Field(None, max_length=500)
+    auth_type: str = Field("none", max_length=30)
+    secret_ref: Optional[str] = Field(None, max_length=200)
+    oauth_client_id: Optional[str] = Field(None, max_length=500)
+    oauth_client_secret: Optional[str] = Field(None, max_length=2000)
+    token_url: Optional[str] = Field(None, max_length=500)
+    oauth_scope: Optional[str] = Field(None, max_length=500)
+    token_refresh_buffer_seconds: int = Field(60, ge=0, le=3600)
+    timeout_seconds: int = Field(30, ge=1, le=300)
+    verify_tls: bool = True
+    is_active: bool = True
+
+    @field_validator("server_id", "description", "protocol")
+    @classmethod
+    def validate_server_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Value cannot be empty")
+        return value
+
+
+class IntegrationServerRead(BaseModel):
+    id: int
+    server_id: str
+    description: str
+    protocol: str
+    base_url: Optional[str]
+    api_endpoint: Optional[str]
+    auth_type: str
+    secret_ref: Optional[str]
+    credentials_configured: bool
+    token_url: Optional[str]
+    oauth_scope: Optional[str]
+    token_refresh_buffer_seconds: int
+    timeout_seconds: int
+    verify_tls: bool
+    is_active: bool
+    created_at: datetime
+
+
+class IntegrationServerUpdate(BaseModel):
+    description: Optional[str] = Field(None, max_length=200)
+    protocol: Optional[str] = Field(None, max_length=30)
+    base_url: Optional[str] = Field(None, max_length=500)
+    api_endpoint: Optional[str] = Field(None, max_length=500)
+    auth_type: Optional[str] = Field(None, max_length=30)
+    secret_ref: Optional[str] = Field(None, max_length=200)
+    oauth_client_id: Optional[str] = Field(None, max_length=500)
+    oauth_client_secret: Optional[str] = Field(None, max_length=2000)
+    token_url: Optional[str] = Field(None, max_length=500)
+    oauth_scope: Optional[str] = Field(None, max_length=500)
+    token_refresh_buffer_seconds: Optional[int] = Field(None, ge=0, le=3600)
+    timeout_seconds: Optional[int] = Field(None, ge=1, le=300)
+    verify_tls: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class IntegrationDeliveryRuleCreate(BaseModel):
+    rule_id: str = Field(..., max_length=100)
+    description: str = Field(..., max_length=200)
+    report_filter: dict = Field(default_factory=dict)
+    mapping_config: dict = Field(default_factory=dict)
+    lot_mask: Optional[str] = Field(None, max_length=250)
+    server_id: int
+    dispatch_interval_seconds: int = Field(30, ge=1, le=86400)
+    batch_size: int = Field(100, ge=1, le=10000)
+    max_retries: int = Field(5, ge=0, le=100)
+    is_active: bool = True
+
+    @field_validator("rule_id", "description")
+    @classmethod
+    def validate_rule_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Value cannot be empty")
+        return value
+
+
+class IntegrationDeliveryRuleRead(IntegrationDeliveryRuleCreate):
+    id: int
+    server_code: str
+    created_at: datetime
+
+
+class IntegrationDeliveryRuleUpdate(BaseModel):
+    description: Optional[str] = Field(None, max_length=200)
+    report_filter: Optional[dict] = None
+    mapping_config: Optional[dict] = None
+    lot_mask: Optional[str] = Field(None, max_length=250)
+    server_id: Optional[int] = None
+    dispatch_interval_seconds: Optional[int] = Field(None, ge=1, le=86400)
+    batch_size: Optional[int] = Field(None, ge=1, le=10000)
+    max_retries: Optional[int] = Field(None, ge=0, le=100)
+    is_active: Optional[bool] = None

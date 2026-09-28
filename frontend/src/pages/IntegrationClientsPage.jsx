@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "../ui/Layout.jsx";
+import IntegrationNavigation from "../ui/IntegrationNavigation.jsx";
 import { request } from "../api.js";
 
 const emptyClient = {
@@ -164,6 +165,31 @@ export default function IntegrationClientsPage({
     }
   };
 
+  const toggleClientActive = async (event, client) => {
+    event.stopPropagation();
+    setLoading(true);
+    setStatus("");
+    try {
+      const isActive = !client.is_active;
+      await request(`/production-ingest-clients/${client.client_id}`, {
+        method: "PATCH",
+        data: { is_active: isActive },
+        tenantId: currentTenant,
+        csrfToken,
+      });
+      if (selectedClient?.client_id === client.client_id) {
+        setSelectedClient({ ...selectedClient, is_active: isActive });
+        setForm((current) => ({ ...current, is_active: isActive }));
+      }
+      await loadClients();
+      setStatus(isActive ? "Cliente activado" : "Cliente desactivado");
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Layout
       auth={auth}
@@ -188,6 +214,7 @@ export default function IntegrationClientsPage({
           </div>
         </div>
       </div>
+      <IntegrationNavigation active="clients" />
 
       <div className="crud-layout">
         <div className="crud-grid">
@@ -214,6 +241,7 @@ export default function IntegrationClientsPage({
                     <th>{t("common.description")}</th>
                     <th>{t("reports.lineCode")}</th>
                     <th>{t("common.status")}</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -231,11 +259,21 @@ export default function IntegrationClientsPage({
                           {client.is_active ? t("integrations.active") : t("integrations.inactive")}
                         </span>
                       </td>
+                      <td>
+                        {canAdmin ? (
+                          <div className="table-actions">
+                            <button className="ghost compact" type="button" disabled={loading} onClick={(event) => { event.stopPropagation(); handleSelectClient(client); }}>Editar</button>
+                            <button className="secondary compact" type="button" disabled={loading} onClick={(event) => toggleClientActive(event, client)}>
+                              {client.is_active ? "Desactivar" : "Activar"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                   {!clients.length ? (
                     <tr>
-                      <td colSpan="4">
+                      <td colSpan="5">
                         <div className="empty-state table-empty-state">{t("integrations.empty")}</div>
                       </td>
                     </tr>
@@ -317,24 +355,14 @@ export default function IntegrationClientsPage({
                     </div>
                   </div>
 
-                  <div className="checkbox-panel">
-                    <label className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        checked={form.is_active}
-                        onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
-                      />
-                      <span>{t("integrations.active")}</span>
-                    </label>
-                    <div className="stack-actions">
-                      <button
-                        className="secondary"
-                        type="button"
-                        onClick={() => setForm((current) => ({ ...current, api_key: generateApiKey() }))}
-                      >
-                        {t("integrations.generateKey")}
-                      </button>
-                    </div>
+                  <div className="stack-actions">
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, api_key: generateApiKey() }))}
+                    >
+                      {t("integrations.generateKey")}
+                    </button>
                   </div>
 
                   {!selectedClient ? (

@@ -44,6 +44,7 @@ backend:
     multiTenantEnabled: false
     defaultTenantId: DEFAULT
     productionIngestApiKey: change-this-ingest-key
+    integrationSecretsKey: ""
   resources: {}
 
 database:

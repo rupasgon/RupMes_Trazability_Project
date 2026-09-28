@@ -34,6 +34,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "rupmes.fullname" . }}-backend
                   key: PRODUCTION_INGEST_API_KEY
+            - name: INTEGRATION_SECRETS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rupmes.fullname" . }}-backend
+                  key: INTEGRATION_SECRETS_KEY
             - name: BACKEND_PORT
               value: {{ .Values.backend.service.port | quote }}
             - name: APP_VERSION
