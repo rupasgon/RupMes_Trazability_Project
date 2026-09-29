@@ -13,7 +13,7 @@ COPY alembic ./alembic
 COPY docker/app-start.sh /app/docker/app-start.sh
 
 RUN pip install --no-cache-dir -e .
-RUN chmod +x /app/docker/app-start.sh
+RUN sed -i 's/\r$//' /app/docker/app-start.sh && chmod +x /app/docker/app-start.sh
 
 EXPOSE 8011
 
