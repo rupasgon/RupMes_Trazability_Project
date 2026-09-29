@@ -247,6 +247,21 @@ class LineUpdate(BaseModel):
     description_line: Optional[str] = Field(None, max_length=50)
 
 
+class PlantCreate(BaseModel):
+    plant_id: str = Field(..., max_length=50)
+    description_plant: str = Field(..., max_length=100)
+
+
+class PlantRead(BaseModel):
+    plant_id: str
+    description_plant: str
+    create_date: datetime
+
+
+class PlantUpdate(BaseModel):
+    description_plant: Optional[str] = Field(None, max_length=100)
+
+
 class CellCreate(BaseModel):
     cell_id: str = Field(..., max_length=50)
     description_cell: str = Field(..., max_length=50)

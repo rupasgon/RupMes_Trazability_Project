@@ -103,7 +103,9 @@ from rupmes.models import (
     TbCells,
     TbGroups,
     TbItems,
-    TbLines, TbPlants, TbCells, HrefCellLine,
+    TbLines,
+    TbPlants,
+    HrefCellLine,
     TbModels,
     TbPortalSettings,
     TbRoutings,
@@ -137,6 +139,9 @@ from rupmes.views.schemas import (
     LineCreate,
     LineRead,
     LineUpdate,
+    PlantCreate,
+    PlantRead,
+    PlantUpdate,
     LoginContextRead,
     CellCreate,
     CellRead,
@@ -1207,6 +1212,68 @@ def lines(request: Request, db: Session = Depends(get_db), current=Depends(requi
     tenant_id = require_tenant_access(request, user, db)
     rows = list_lines(db, tenant_id=tenant_id)
     return [LineRead(line_id=row.line_id, description_line=row.description_line, create_date=row.create_date) for row in rows]
+
+
+@app.get("/plants", response_model=list[PlantRead])
+def plants(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    rows = db.execute(
+        select(TbPlants).where(TbPlants.tenant_id == tenant_id).order_by(TbPlants.plant_id)
+    ).scalars().all()
+    return [PlantRead(plant_id=row.plant_id, description_plant=row.description_plant, create_date=row.create_date) for row in rows]
+
+
+@app.post("/plants", response_model=PlantRead, status_code=status.HTTP_201_CREATED)
+def create_plant_endpoint(payload: PlantCreate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = TbPlants(plant_id=payload.plant_id, description_plant=payload.description_plant, tenant_id=tenant_id)
+    try:
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Plant already exists")
+    return PlantRead(plant_id=row.plant_id, description_plant=row.description_plant, create_date=row.create_date)
+
+
+@app.patch("/plants/{plant_id}", response_model=PlantRead)
+def update_plant_endpoint(plant_id: str, payload: PlantUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = db.execute(select(TbPlants).where(TbPlants.tenant_id == tenant_id, TbPlants.plant_id == plant_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    if payload.description_plant is not None:
+        row.description_plant = payload.description_plant
+    db.commit()
+    db.refresh(row)
+    return PlantRead(plant_id=row.plant_id, description_plant=row.description_plant, create_date=row.create_date)
+
+
+@app.delete("/plants/{plant_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_plant_endpoint(plant_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    row = db.execute(select(TbPlants).where(TbPlants.tenant_id == tenant_id, TbPlants.plant_id == plant_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    in_use = db.execute(
+        select(ProductionIngestClient.id).where(
+            ProductionIngestClient.tenant_id == tenant_id,
+            ProductionIngestClient.plant_code == plant_id,
+        ).limit(1)
+    ).scalar_one_or_none()
+    if in_use:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Plant is used by an integration client")
+    db.delete(row)
+    db.commit()
+    return None
 
 
 @app.get("/lines/{line_id}", response_model=LineRead)

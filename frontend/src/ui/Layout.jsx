@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { request } from "../api.js";
 import { getRuntimeConfig } from "../runtime-config.js";
 
-const MASTER_ROUTES = ["lines", "cells", "models", "statuses", "routings"];
+const MASTER_ROUTES = ["plants", "lines", "cells", "models", "statuses", "routings"];
 const ADMIN_ROUTES = ["users", "roles", "integrations"];
 
 function NavGroup({ collapsed, label, isOpen, onToggle, children }) {
@@ -152,6 +152,10 @@ export default function Layout({ auth, onLogout, active, tenantId, setTenantId, 
                 isOpen={openGroups.masters}
                 onToggle={() => setOpenGroups((current) => ({ ...current, masters: !current.masters }))}
               >
+                <Link className={`nav-link sub-link ${active === "plants" ? "active" : ""}`} to="/plants" title={t("nav.plants")}>
+                  <span className="nav-icon">PL</span>
+                  <span className="nav-text">{t("nav.plants")}</span>
+                </Link>
                 <Link className={`nav-link sub-link ${active === "lines" ? "active" : ""}`} to="/lines" title={t("nav.lines")}>
                   <span className="nav-icon">LN</span>
                   <span className="nav-text">{t("nav.lines")}</span>
