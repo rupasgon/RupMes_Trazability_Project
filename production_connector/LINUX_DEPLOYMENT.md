@@ -40,7 +40,7 @@ Do not copy the source repository.
 7. Validate before installing:
 
 ```bash
-./production_connector/dist/linux/cli/rupmes-connector/rupmes-connector validate-config --config production_connector/config.json
+./production_connector/dist/linux/cli/rupmes-connector validate-config --config production_connector/config.json
 ```
 
 8. Give execution permission to the installer scripts if needed:
@@ -69,5 +69,5 @@ cd /opt/rupmes-connectors/bmw-szl-levers-wip
 - The packaging machine does need Python to generate the bundle.
 - SQL Server sources still require the OS-level ODBC driver on the client machine.
 - The installer creates a `systemd` instance named `rupmes-production-connector@<instance-id>`. Each instance has its own package, configuration, secret file and checkpoint. Use `systemctl status rupmes-production-connector@<instance-id>` and `journalctl -u rupmes-production-connector@<instance-id>` to operate one connector without affecting the others.
-- The Linux bundle executable is generated at `production_connector/dist/linux/cli/rupmes-connector/rupmes-connector`.
+- The Linux bundle executable is generated at `production_connector/dist/linux/cli/rupmes-connector`.
 - Build the Linux bundle on the same CPU architecture as its destination. Raspberry Pi requires ARM64/aarch64 packaging.

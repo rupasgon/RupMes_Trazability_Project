@@ -16,7 +16,7 @@ CONFIG_PATH="${PROJECT_ROOT}/production_connector/config.json"
 
 CONNECTOR_ROOT="${PROJECT_ROOT}/production_connector"
 DIST_ROOT="${CONNECTOR_ROOT}/dist/linux/cli"
-BUNDLE_EXE="${DIST_ROOT}/rupmes-connector/rupmes-connector"
+BUNDLE_EXE="${DIST_ROOT}/rupmes-connector"
 SERVICE_NAME="rupmes-production-connector@${INSTANCE_ID}"
 SERVICE_FILE="/etc/systemd/system/rupmes-production-connector@.service"
 SERVICE_TEMPLATE="${CONNECTOR_ROOT}/linux/rupmes-production-connector@.service"
