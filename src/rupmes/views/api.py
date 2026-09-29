@@ -103,7 +103,7 @@ from rupmes.models import (
     TbCells,
     TbGroups,
     TbItems,
-    TbLines,
+    TbLines, TbPlants, TbCells, HrefCellLine,
     TbModels,
     TbPortalSettings,
     TbRoutings,
@@ -657,6 +657,28 @@ def list_production_ingest_clients_endpoint(
     return [_serialize_production_ingest_client(row) for row in rows]
 
 
+@app.get("/production-ingest-clients/master-data")
+def production_ingest_client_master_data(request: Request, db: Session = Depends(get_db), current=Depends(require_permission("production.admin"))):
+    user, _session = current
+    tenant_id = require_tenant_access(request, user, db)
+    plants = db.execute(select(TbPlants).where(TbPlants.tenant_id == tenant_id).order_by(TbPlants.plant_id)).scalars().all()
+    lines = db.execute(select(TbLines).where(TbLines.tenant_id == tenant_id).order_by(TbLines.line_id)).scalars().all()
+    cells = db.execute(select(TbCells).where(TbCells.tenant_id == tenant_id).order_by(TbCells.cell_id)).scalars().all()
+    links = db.execute(select(HrefCellLine).join(TbCells, HrefCellLine.cell_id == TbCells.cell_id).where(TbCells.tenant_id == tenant_id)).scalars().all()
+    return {"plants": [{"id": x.plant_id, "description": x.description_plant} for x in plants], "lines": [{"id": x.line_id, "description": x.description_line} for x in lines], "cells": [{"id": x.cell_id, "description": x.description_cell} for x in cells], "cell_lines": [{"cell_id": x.cell_id, "line_id": x.line_id} for x in links]}
+
+
+def _validate_ingest_client_context(db: Session, tenant_id: str, plant: str | None, line: str | None, cell: str | None):
+    if plant and not db.execute(select(TbPlants.id_row).where(TbPlants.tenant_id == tenant_id, TbPlants.plant_id == plant)).scalar_one_or_none():
+        raise HTTPException(status_code=422, detail="Plant master not found")
+    if line and not db.execute(select(TbLines.id_row).where(TbLines.tenant_id == tenant_id, TbLines.line_id == line)).scalar_one_or_none():
+        raise HTTPException(status_code=422, detail="Line master not found")
+    if cell and not db.execute(select(TbCells.id_row).where(TbCells.tenant_id == tenant_id, TbCells.cell_id == cell)).scalar_one_or_none():
+        raise HTTPException(status_code=422, detail="Cell master not found")
+    if line and cell and not db.execute(select(HrefCellLine.id_row).where(HrefCellLine.line_id == line, HrefCellLine.cell_id == cell)).scalar_one_or_none():
+        raise HTTPException(status_code=422, detail="Cell is not assigned to the selected line")
+
+
 @app.get("/production-ingest-clients/{client_id}", response_model=ProductionIngestClientRead)
 def get_production_ingest_client_endpoint(
     client_id: str,
@@ -681,6 +703,8 @@ def create_production_ingest_client_endpoint(
 ):
     _user, session_row = current
     require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, _user, db)
+    _validate_ingest_client_context(db, tenant_id, payload.plant_code, payload.line_code, payload.machine_code)
     client = ProductionIngestClient(
         client_id=payload.client_id,
         description=payload.description,
@@ -691,7 +715,7 @@ def create_production_ingest_client_endpoint(
         machine_code=payload.machine_code,
         source_system=payload.source_system,
         is_active=payload.is_active,
-        tenant_id=require_tenant_access(request, _user, db),
+        tenant_id=tenant_id,
     )
     try:
         row = create_production_ingest_client(db, client)
@@ -716,6 +740,7 @@ def update_production_ingest_client_endpoint(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production ingest client not found")
     updates = payload.model_dump(exclude_unset=True)
+    _validate_ingest_client_context(db, tenant_id, updates.get("plant_code", row.plant_code), updates.get("line_code", row.line_code), updates.get("machine_code", row.machine_code))
     api_key = updates.pop("api_key", None)
     for field, value in updates.items():
         setattr(row, field, value)
@@ -892,7 +917,13 @@ def ingest_production_report_endpoint(
     db: Session = Depends(get_db),
 ):
     client = require_production_ingest_api_key(request, db, payload)
-    report = ProductionReport(**payload.model_dump(), tenant_id=client.tenant_id if client is not None else get_default_tenant_id())
+    values = payload.model_dump()
+    if client is not None:
+        for field in ("plant_code", "line_code", "station_code", "machine_code", "source_system"):
+            configured = getattr(client, field)
+            if configured:
+                values[field] = configured
+    report = ProductionReport(**values, tenant_id=client.tenant_id if client is not None else get_default_tenant_id())
     try:
         row = create_production_report(db, report)
     except IntegrityError:

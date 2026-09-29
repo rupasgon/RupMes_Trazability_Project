@@ -32,6 +32,15 @@ class TbLines(Base):
     create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
 
+class TbPlants(Base):
+    __tablename__ = "tb_plants"
+    id_row: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    plant_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    description_plant: Mapped[str] = mapped_column(String(100), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(50), ForeignKey("tb_tenants.tenant_id"), nullable=False, server_default=text("'DEFAULT'"))
+    create_date: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
 class TbTenants(Base):
     __tablename__ = "tb_tenants"
 

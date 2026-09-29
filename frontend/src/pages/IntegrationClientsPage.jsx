@@ -34,6 +34,7 @@ export default function IntegrationClientsPage({
   setTheme,
 }) {
   const [clients, setClients] = useState([]);
+  const [masters, setMasters] = useState({ plants: [], lines: [], cells: [], cell_lines: [] });
   const [selectedClient, setSelectedClient] = useState(null);
   const [form, setForm] = useState(emptyClient);
   const [editorMode, setEditorMode] = useState("idle");
@@ -46,8 +47,8 @@ export default function IntegrationClientsPage({
 
   const loadClients = async () => {
     if (!canAdmin) return;
-    const data = await request("/production-ingest-clients", { tenantId: currentTenant });
-    setClients(data);
+    const [data, masterData] = await Promise.all([request("/production-ingest-clients", { tenantId: currentTenant }), request("/production-ingest-clients/master-data", { tenantId: currentTenant })]);
+    setClients(data); setMasters(masterData);
   };
 
   useEffect(() => {
@@ -335,19 +336,19 @@ export default function IntegrationClientsPage({
                     </div>
                     <div className="field">
                       <label>{t("reports.plantCode")}</label>
-                      <input value={form.plant_code} onChange={(event) => setForm({ ...form, plant_code: event.target.value })} />
+                      <select required value={form.plant_code} onChange={(event) => setForm({ ...form, plant_code: event.target.value })}><option value="">Selecciona</option>{masters.plants.map((x) => <option key={x.id} value={x.id}>{x.id} — {x.description}</option>)}</select>
                     </div>
                     <div className="field">
                       <label>{t("reports.lineCode")}</label>
-                      <input value={form.line_code} onChange={(event) => setForm({ ...form, line_code: event.target.value })} />
+                      <select required value={form.line_code} onChange={(event) => setForm({ ...form, line_code: event.target.value, machine_code: "" })}><option value="">Selecciona</option>{masters.lines.map((x) => <option key={x.id} value={x.id}>{x.id} — {x.description}</option>)}</select>
                     </div>
                     <div className="field">
                       <label>{t("reports.stationCode")}</label>
                       <input value={form.station_code} onChange={(event) => setForm({ ...form, station_code: event.target.value })} />
                     </div>
                     <div className="field">
-                      <label>{t("reports.machineCode")}</label>
-                      <input value={form.machine_code} onChange={(event) => setForm({ ...form, machine_code: event.target.value })} />
+                      <label>Celda / máquina</label>
+                      <select required value={form.machine_code} onChange={(event) => setForm({ ...form, machine_code: event.target.value })}><option value="">Selecciona</option>{masters.cells.filter((x) => !form.line_code || masters.cell_lines.some((link) => link.cell_id === x.id && link.line_id === form.line_code)).map((x) => <option key={x.id} value={x.id}>{x.id} — {x.description}</option>)}</select>
                     </div>
                     <div className="field">
                       <label>{t("integrations.sourceSystem")}</label>
