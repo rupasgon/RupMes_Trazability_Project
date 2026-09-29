@@ -21,7 +21,7 @@ PACKAGE_STATE_ROOT="${PACKAGE_CONNECTOR_ROOT}/state"
 PACKAGE_LOGS_ROOT="${PACKAGE_CONNECTOR_ROOT}/logs"
 PACKAGE_TEMPLATES_ROOT="${PACKAGE_CONNECTOR_ROOT}/templates"
 PACKAGE_ZIP="${RELEASE_ROOT}/RupMesProductionConnector.tar.gz"
-SERVICE_NAME="rupmes-production-connector"
+SERVICE_TEMPLATE="rupmes-production-connector@.service"
 
 if [[ "${BUILD_BUNDLE}" == "1" ]]; then
   "${LINUX_ROOT}/build-bundle.sh" "${PROJECT_ROOT}"
@@ -38,7 +38,7 @@ mkdir -p "${PACKAGE_LINUX_ROOT}" "${PACKAGE_CLI_ROOT}" "${PACKAGE_STATE_ROOT}" "
 
 cp "${LINUX_ROOT}/install.sh" "${PACKAGE_LINUX_ROOT}/"
 cp "${LINUX_ROOT}/uninstall.sh" "${PACKAGE_LINUX_ROOT}/"
-cp "${LINUX_ROOT}/${SERVICE_NAME}.service" "${PACKAGE_LINUX_ROOT}/${SERVICE_NAME}.service"
+cp "${LINUX_ROOT}/${SERVICE_TEMPLATE}" "${PACKAGE_LINUX_ROOT}/${SERVICE_TEMPLATE}"
 cp -r "${CLI_BUNDLE_ROOT}/." "${PACKAGE_CLI_ROOT}/"
 cp -r "${CONNECTOR_ROOT}/templates/." "${PACKAGE_TEMPLATES_ROOT}/"
 cp "${CONNECTOR_ROOT}/secrets.env.template" "${PACKAGE_CONNECTOR_ROOT}/secrets.env.template"
@@ -54,12 +54,12 @@ RupMes Production Connector
 
 Recommended installation on client machines:
 
-1. Open a shell with sudo permissions.
-2. Edit production_connector/config.json if included, or copy config.template.json to config.json and complete it.
-3. Copy a suitable file from production_connector/templates to production_connector/config.json and set its values.
+1. Choose a unique lowercase instance ID, for example bmw-szl-levers-wip.
+2. Extract this package to /opt/rupmes-connectors/<instance-id>.
+3. Edit production_connector/config.json if included, or copy config.template.json to config.json and complete it.
 4. Copy secrets.env.template to secrets.env and set RUPMES_CLIENT_ID and RUPMES_API_KEY.
-5. Install as systemd service:
-   ./production_connector/linux/install.sh "<package-root>" "<package-root>/production_connector/config.json"
+5. Install this independent systemd instance:
+   ./production_connector/linux/install.sh "<instance-id>"
 EOF
 
 if [[ "${ZIP_PACKAGE}" == "1" ]]; then

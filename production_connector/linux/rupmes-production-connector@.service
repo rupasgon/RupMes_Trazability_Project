@@ -1,0 +1,17 @@
+[Unit]
+Description=RupMes production connector instance %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rupmes
+Group=rupmes
+WorkingDirectory=/opt/rupmes-connectors/%i
+EnvironmentFile=/opt/rupmes-connectors/%i/production_connector/secrets.env
+ExecStart=/opt/rupmes-connectors/%i/production_connector/dist/linux/cli/rupmes-connector/rupmes-connector run --config /opt/rupmes-connectors/%i/production_connector/config.json
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
