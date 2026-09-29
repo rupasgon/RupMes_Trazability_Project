@@ -277,6 +277,10 @@ class CellUpdate(BaseModel):
     description_cell: Optional[str] = Field(None, max_length=50)
 
 
+class CellLineAssignmentUpdate(BaseModel):
+    line_ids: list[str] = Field(default_factory=list)
+
+
 class ModelCreate(BaseModel):
     model_id: str = Field(..., max_length=50)
     description_model: str = Field(..., max_length=50)

@@ -6,6 +6,8 @@ const emptyCell = { cell_id: "", description_cell: "" };
 
 export default function CellsPage({ auth, onLogout, tenantId, setTenantId, csrfToken, t, lang, setLang, theme, setTheme }) {
   const [cells, setCells] = useState([]);
+  const [lines, setLines] = useState([]);
+  const [assignedLineIds, setAssignedLineIds] = useState([]);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(emptyCell);
   const [editorMode, setEditorMode] = useState("idle");
@@ -20,8 +22,8 @@ export default function CellsPage({ auth, onLogout, tenantId, setTenantId, csrfT
   };
 
   useEffect(() => {
-    loadCells().catch(() => {});
-  }, []);
+    Promise.all([loadCells(), request("/lines", { tenantId })]).then(([, data]) => setLines(data)).catch(() => {});
+  }, [tenantId]);
 
   const handleCreate = async (event) => {
     event.preventDefault();
@@ -44,10 +46,26 @@ export default function CellsPage({ auth, onLogout, tenantId, setTenantId, csrfT
     }
   };
 
-  const handleSelect = (row) => {
+  const handleSelect = async (row) => {
     setSelected(row);
     setEditorMode("edit");
     setForm({ cell_id: row.cell_id, description_cell: row.description_cell });
+    setStatus("");
+    try {
+      const assignments = await request(`/cells/${row.cell_id}/lines`, { tenantId });
+      setAssignedLineIds(assignments.map((line) => line.line_id));
+    } catch (error) {
+      setStatus(error.message);
+    }
+  };
+
+  const saveAssignments = async () => {
+    if (!selected) return;
+    setStatus(""); setLoading(true);
+    try {
+      await request(`/cells/${selected.cell_id}/lines`, { method: "PUT", data: { line_ids: assignedLineIds }, tenantId, csrfToken });
+      setStatus(t("masters.cells.linesUpdated"));
+    } catch (error) { setStatus(error.message); } finally { setLoading(false); }
   };
 
   const handleUpdate = async () => {
@@ -122,7 +140,7 @@ export default function CellsPage({ auth, onLogout, tenantId, setTenantId, csrfT
             </div>
             <div className="row-space">
               {canWrite ? (
-                <button className="secondary" type="button" onClick={() => { setSelected(null); setForm(emptyCell); setStatus(""); setEditorMode("create"); }}>
+                <button className="secondary" type="button" onClick={() => { setSelected(null); setAssignedLineIds([]); setForm(emptyCell); setStatus(""); setEditorMode("create"); }}>
                   {t("masters.cells.new")}
                 </button>
               ) : null}
@@ -191,6 +209,14 @@ export default function CellsPage({ auth, onLogout, tenantId, setTenantId, csrfT
             )}
             {status ? <div className="notice">{status}</div> : null}
           </div>
+          {selected ? <div className="card crud-card">
+            <div className="crud-card-header"><div><h3>{t("masters.cells.assignedLines")}</h3><p>{t("masters.cells.assignedLinesHint")}</p></div></div>
+            <div className="checkbox-list">
+              {lines.map((line) => <label className="checkbox-item" key={line.line_id}><input type="checkbox" checked={assignedLineIds.includes(line.line_id)} disabled={!canWrite || loading} onChange={(event) => setAssignedLineIds((current) => event.target.checked ? [...current, line.line_id] : current.filter((id) => id !== line.line_id))} /><span>{line.line_id} — {line.description_line}</span></label>)}
+              {!lines.length ? <div className="empty-state">{t("common.empty")}</div> : null}
+            </div>
+            <div className="editor-actions compact-end"><button className="secondary" type="button" disabled={!canWrite || loading} onClick={saveAssignments}>{t("masters.cells.saveLines")}</button></div>
+          </div> : null}
         </div>
       </div>
     </Layout>

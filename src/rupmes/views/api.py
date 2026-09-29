@@ -146,6 +146,7 @@ from rupmes.views.schemas import (
     CellCreate,
     CellRead,
     CellUpdate,
+    CellLineAssignmentUpdate,
     ModelCreate,
     ModelRead,
     ModelUpdate,
@@ -1336,6 +1337,55 @@ def cells(request: Request, db: Session = Depends(get_db), current=Depends(requi
     tenant_id = require_tenant_access(request, user, db)
     rows = list_cells(db, tenant_id=tenant_id)
     return [CellRead(cell_id=row.cell_id, description_cell=row.description_cell, create_date=row.create_date) for row in rows]
+
+
+@app.get("/cells/{cell_id}/lines", response_model=list[LineRead])
+def get_cell_lines_endpoint(cell_id: str, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.read"))):
+    user, _session_row = current
+    tenant_id = require_tenant_access(request, user, db)
+    cell = db.execute(select(TbCells).where(TbCells.tenant_id == tenant_id, TbCells.cell_id == cell_id)).scalar_one_or_none()
+    if not cell:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
+    rows = db.execute(
+        select(TbLines)
+        .join(HrefCellLine, HrefCellLine.line_id == TbLines.line_id)
+        .where(TbLines.tenant_id == tenant_id, HrefCellLine.cell_id == cell_id)
+        .order_by(TbLines.line_id)
+    ).scalars().all()
+    return [LineRead(line_id=row.line_id, description_line=row.description_line, create_date=row.create_date) for row in rows]
+
+
+@app.put("/cells/{cell_id}/lines", response_model=list[LineRead])
+def replace_cell_lines_endpoint(cell_id: str, payload: CellLineAssignmentUpdate, request: Request, db: Session = Depends(get_db), current=Depends(require_permission("masters.write"))):
+    user, session_row = current
+    require_csrf(request, session_row)
+    tenant_id = require_tenant_access(request, user, db)
+    cell = db.execute(select(TbCells).where(TbCells.tenant_id == tenant_id, TbCells.cell_id == cell_id)).scalar_one_or_none()
+    if not cell:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
+    requested_line_ids = sorted(set(payload.line_ids))
+    valid_line_ids = set(db.execute(select(TbLines.line_id).where(TbLines.tenant_id == tenant_id, TbLines.line_id.in_(requested_line_ids))).scalars().all()) if requested_line_ids else set()
+    if len(valid_line_ids) != len(requested_line_ids):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="One or more lines do not belong to the active tenant")
+    current_line_ids = set(db.execute(select(HrefCellLine.line_id).where(HrefCellLine.cell_id == cell_id)).scalars().all())
+    removed_line_ids = current_line_ids - valid_line_ids
+    if removed_line_ids and db.execute(
+        select(ProductionIngestClient.id).where(
+            ProductionIngestClient.tenant_id == tenant_id,
+            ProductionIngestClient.machine_code == cell_id,
+            ProductionIngestClient.line_code.in_(removed_line_ids),
+        ).limit(1)
+    ).scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A client uses this cell-line assignment")
+    db.query(HrefCellLine).filter(HrefCellLine.cell_id == cell_id).delete(synchronize_session=False)
+    db.add_all([HrefCellLine(cell_id=cell_id, line_id=line_id) for line_id in requested_line_ids])
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cell-line assignment conflict")
+    rows = db.execute(select(TbLines).where(TbLines.tenant_id == tenant_id, TbLines.line_id.in_(requested_line_ids)).order_by(TbLines.line_id)).scalars().all() if requested_line_ids else []
+    return [LineRead(line_id=row.line_id, description_line=row.description_line, create_date=row.create_date) for row in rows]
 
 
 @app.get("/cells/{cell_id}", response_model=CellRead)
