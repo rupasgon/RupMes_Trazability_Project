@@ -48,6 +48,8 @@ fi
 sudo chown -R root:rupmes "${PROJECT_ROOT}"
 sudo find "${PROJECT_ROOT}" -type d -exec chmod 0750 {} +
 sudo find "${PROJECT_ROOT}" -type f -exec chmod 0640 {} +
+sudo install -d -o rupmes -g rupmes -m 0750 "${CONNECTOR_ROOT}/state" "${CONNECTOR_ROOT}/logs"
+sudo chown -R rupmes:rupmes "${CONNECTOR_ROOT}/state" "${CONNECTOR_ROOT}/logs"
 sudo chmod 0750 "${BUNDLE_EXE}" "${CONNECTOR_ROOT}/linux/install.sh" "${CONNECTOR_ROOT}/linux/uninstall.sh"
 sudo chmod 0640 "${CONNECTOR_ROOT}/secrets.env"
 sudo install -m 0644 "${SERVICE_TEMPLATE}" "${SERVICE_FILE}"
