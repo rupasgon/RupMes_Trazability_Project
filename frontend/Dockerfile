@@ -23,4 +23,4 @@ COPY app-config.template.js /usr/share/nginx/html/app-config.template.js
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 EXPOSE 80
-CMD ["/docker-entrypoint.sh"]
+CMD ["sh", "/docker-entrypoint.sh"]

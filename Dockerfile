@@ -17,4 +17,4 @@ RUN chmod +x /app/docker/app-start.sh
 
 EXPOSE 8011
 
-CMD ["/app/docker/app-start.sh"]
+CMD ["sh", "/app/docker/app-start.sh"]
