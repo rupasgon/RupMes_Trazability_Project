@@ -127,12 +127,19 @@ def test_machine_ingest_production_report_with_api_key(monkeypatch):
     assert created.status_code == 201
     assert created.json()["serial_number"] == "SN-INGEST-001"
 
-    forbidden_scope = client.post(
+    context_from_client = client.post(
         "/production-reports/ingest",
-        json={**payload, "line_code": "LINE-OTHER"},
+        json={
+            "serial_number": "SN-INGEST-002",
+            "result": "OK",
+            "production_datetime": "2026-05-26T23:16:00",
+        },
         headers={"X-Client-Id": "LINE-Z-CLIENT", "X-API-Key": "line-secret"},
     )
-    assert forbidden_scope.status_code == 403
+    assert context_from_client.status_code == 201
+    assert context_from_client.json()["plant_code"] == "PLANT-ES"
+    assert context_from_client.json()["line_code"] == "LINE-Z"
+    assert context_from_client.json()["source_system"] == "PLC"
 
 
 def test_production_report_analytics_and_validation():

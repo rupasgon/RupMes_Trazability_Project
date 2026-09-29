@@ -173,6 +173,7 @@ from rupmes.views.schemas import (
     IntegrationServerRead,
     IntegrationServerUpdate,
     ProductionReportCreate,
+    ProductionReportIngestCreate,
     ProductionReportRead,
     StatusCreate,
     StatusRead,
@@ -918,17 +919,18 @@ def create_production_report_endpoint(
 
 @app.post("/production-reports/ingest", response_model=ProductionReportRead, status_code=status.HTTP_201_CREATED)
 def ingest_production_report_endpoint(
-    payload: ProductionReportCreate,
+    payload: ProductionReportIngestCreate,
     request: Request,
     db: Session = Depends(get_db),
 ):
-    client = require_production_ingest_api_key(request, db, payload)
+    client = require_production_ingest_api_key(request, db)
     values = payload.model_dump()
     if client is not None:
         for field in ("plant_code", "line_code", "station_code", "machine_code", "source_system"):
             configured = getattr(client, field)
             if configured:
                 values[field] = configured
+    values = ProductionReportCreate.model_validate(values).model_dump()
     report = ProductionReport(**values, tenant_id=client.tenant_id if client is not None else get_default_tenant_id())
     try:
         row = create_production_report(db, report)

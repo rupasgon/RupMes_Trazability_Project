@@ -462,6 +462,27 @@ class ProductionReportCreate(BaseModel):
         return cleaned
 
 
+class ProductionReportIngestCreate(ProductionReportCreate):
+    """Machine-to-machine payload.
+
+    Industrial context is optionally supplied by the client but, when the
+    authenticated ingest client has it configured, the API is authoritative
+    and fills it in server-side.
+    """
+
+    line_code: Optional[str] = Field(None, max_length=50)
+
+    @field_validator("line_code")
+    @classmethod
+    def validate_optional_line_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Value cannot be empty")
+        return cleaned
+
+
 class ProductionReportRead(BaseModel):
     id: int
     plant_code: Optional[str]
