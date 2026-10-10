@@ -1,0 +1,37 @@
+{
+  "name": "line_a_modbus_rtu",
+  "api": {
+    "base_url": "https://api-rupmes.example.local",
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}",
+    "verify_tls": true
+  },
+  "source": {
+    "type": "modbus",
+    "modbus_transport": "rtu",
+    "modbus_serial_port": "/dev/ttyUSB0",
+    "modbus_baudrate": 9600,
+    "modbus_parity": "N",
+    "modbus_stopbits": 1,
+    "modbus_unit_id": 1,
+    "modbus_registers": {
+      "sequence_id": { "address": 0, "data_type": "uint32" },
+      "serial_number": { "address": 10, "data_type": "string", "count": 10 },
+      "result_code": { "address": 30, "data_type": "uint16" }
+    },
+    "date_field": "event_received_at",
+    "id_field": "sequence_id",
+    "checkpoint_mode": "sequence",
+    "timestamp_source": "received_at"
+  },
+  "payload": {
+    "mappings": {
+      "line_code": { "constant": "LINE-A" },
+      "serial_number": { "source": "serial_number", "transform": "string" },
+      "result": { "source": "result_code", "transform": "string", "value_map": { "1": "OK", "2": "NOK" } },
+      "production_datetime": { "source": "event_received_at", "transform": "datetime" }
+    }
+  },
+  "state": { "checkpoint_file": "production_connector/state/line_a_modbus_rtu.json" },
+  "runtime": { "poll_interval_seconds": 2, "dry_run": true }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "line_a_modbus_tcp",
+  "api": {
+    "base_url": "https://api-rupmes.example.local",
+    "endpoint": "/production-reports/ingest",
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}",
+    "verify_tls": true
+  },
+  "source": {
+    "type": "modbus",
+    "modbus_transport": "tcp",
+    "modbus_host": "192.168.10.60",
+    "modbus_port": 502,
+    "modbus_unit_id": 1,
+    "modbus_timeout_seconds": 5,
+    "modbus_registers": {
+      "sequence_id": { "address": 0, "area": "holding", "data_type": "uint32" },
+      "serial_number": { "address": 10, "area": "holding", "data_type": "string", "count": 10 },
+      "result_code": { "address": 30, "area": "holding", "data_type": "uint16" },
+      "data_ready": { "address": 0, "area": "coil", "data_type": "bool" }
+    },
+    "modbus_trigger_field": "data_ready",
+    "modbus_trigger_value": true,
+    "date_field": "event_received_at",
+    "id_field": "sequence_id",
+    "checkpoint_mode": "sequence",
+    "timestamp_source": "received_at"
+  },
+  "payload": {
+    "required_fields": ["line_code", "serial_number", "result", "production_datetime"],
+    "mappings": {
+      "line_code": { "constant": "LINE-A" },
+      "serial_number": { "source": "serial_number", "transform": "string" },
+      "result": {
+        "source": "result_code",
+        "transform": "string",
+        "value_map": { "1": "OK", "2": "NOK", "3": "SCRAP", "4": "REWORK" }
+      },
+      "production_datetime": { "source": "event_received_at", "transform": "datetime" },
+      "source_system": { "constant": "LINE-A-MODBUS-TCP" }
+    }
+  },
+  "state": {
+    "checkpoint_file": "production_connector/state/line_a_modbus.json",
+    "initial_value": "2026-01-01T00:00:00"
+  },
+  "runtime": {
+    "poll_interval_seconds": 2,
+    "log_level": "INFO",
+    "dry_run": true,
+    "stop_on_error": false
+  }
+}

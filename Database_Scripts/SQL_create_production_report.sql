@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS public.production_report (
+    id BIGSERIAL PRIMARY KEY,
+    plant_code VARCHAR(50),
+    line_code VARCHAR(50) NOT NULL,
+    station_code VARCHAR(50),
+    machine_code VARCHAR(50),
+    shift_code VARCHAR(20),
+    production_order VARCHAR(100),
+    product_code VARCHAR(100),
+    product_family VARCHAR(100),
+    customer VARCHAR(100),
+    serial_number VARCHAR(150) NOT NULL,
+    result VARCHAR(20) NOT NULL,
+    error_code VARCHAR(50),
+    error_description TEXT,
+    defect_station VARCHAR(50),
+    production_datetime TIMESTAMP NOT NULL,
+    cycle_time_seconds NUMERIC(10,3),
+    target_cycle_time_seconds NUMERIC(10,3),
+    component_serial VARCHAR(150),
+    component_lot VARCHAR(100),
+    supplier_code VARCHAR(100),
+    nest_number INT,
+    tool_id VARCHAR(100),
+    program_name VARCHAR(100),
+    software_version VARCHAR(100),
+    is_rework BOOLEAN DEFAULT FALSE,
+    rework_result VARCHAR(20),
+    rework_datetime TIMESTAMP,
+    source_system VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_production_report_result
+        CHECK (result IN ('OK', 'NOK', 'SCRAP', 'REWORK')),
+    CONSTRAINT ck_production_report_rework_result
+        CHECK (rework_result IS NULL OR rework_result IN ('OK', 'NOK', 'SCRAP', 'REWORK')),
+    CONSTRAINT ck_production_report_serial_not_blank
+        CHECK (trim(serial_number) <> ''),
+    CONSTRAINT ck_production_report_line_not_blank
+        CHECK (trim(line_code) <> '')
+);

@@ -1,0 +1,56 @@
+{
+  "name": "routing_process_result",
+  "api": {
+    "base_url": "https://api-rupmes.example.local",
+    "endpoint": "/routing-process-results/ingest",
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}",
+    "timeout_seconds": 30,
+    "verify_tls": true
+  },
+  "source": {
+    "type": "sql",
+    "connection_url": "mysql+pymysql://user:password@localhost:3306/source_database",
+    "schema": null,
+    "table": "process_results",
+    "date_field": "result_timestamp",
+    "id_field": "id",
+    "checkpoint_mode": "sequence",
+    "timestamp_source": "source",
+    "batch_size": 500,
+    "extra_filters": []
+  },
+  "payload": {
+    "required_fields": ["model_id", "serial_number", "process_id", "result", "process_datetime"],
+    "drop_null_fields": true,
+    "mappings": {
+      "model_id": { "source": "model_id", "transform": "string" },
+      "serial_number": { "source": "serial_number", "transform": "string" },
+      "process_id": { "constant": "TORQUE", "transform": "string" },
+      "result": { "source": "result", "transform": "string", "value_map": { "PASS": "OK", "FAIL": "NOK" } },
+      "process_datetime": { "source": "result_timestamp", "transform": "datetime" },
+      "source_system": { "constant": "TORQUE-STATION", "transform": "string" },
+      "plant_code": { "constant": "Merit BCN", "transform": "string" },
+      "line_code": { "constant": "AUX-LINE", "transform": "string" },
+      "station_code": { "constant": "AUX-STATION", "transform": "string" },
+      "machine_code": { "constant": "AUX-MACHINE", "transform": "string" }
+    },
+    "nested_mappings": {
+      "result_values": {
+        "torque_nm": { "source": "torque_value", "transform": "float" },
+        "program": { "source": "program", "transform": "string" }
+      }
+    }
+  },
+  "state": {
+    "checkpoint_file": "production_connector/state/routing_process_result.json",
+    "initial_value": "0"
+  },
+  "runtime": {
+    "poll_interval_seconds": 10,
+    "log_level": "INFO",
+    "dry_run": true,
+    "stop_on_error": false,
+    "max_batches_per_cycle": 100
+  }
+}

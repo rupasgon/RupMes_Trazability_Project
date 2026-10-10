@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16
+    env_file:
+      - ${ENV_FILE:-.env}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    env_file:
+      - ${ENV_FILE:-.env}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    env_file:
+      - ${ENV_FILE:-.env}
+    ports:
+      - "${BACKEND_PORT:-8011}:${BACKEND_PORT:-8011}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8011}
+        VITE_DEFAULT_LANG: ${VITE_DEFAULT_LANG:-es}
+        VITE_CSRF_COOKIE_NAME: ${VITE_CSRF_COOKIE_NAME:-rupmes_csrf}
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8011}
+      VITE_TENANT_ID: ${VITE_TENANT_ID:-}
+      VITE_CSRF_COOKIE_NAME: ${VITE_CSRF_COOKIE_NAME:-rupmes_csrf}
+      VITE_DEFAULT_LANG: ${VITE_DEFAULT_LANG:-es}
+      VITE_APP_VERSION: ${VITE_APP_VERSION:-development}
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      - app
+
+volumes:
+  db_data:

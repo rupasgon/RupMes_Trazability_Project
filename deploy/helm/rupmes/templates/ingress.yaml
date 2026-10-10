@@ -1,0 +1,44 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "rupmes.fullname" . }}
+  labels:
+    {{- include "rupmes.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.frontendHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "rupmes.fullname" . }}-frontend
+                port:
+                  number: {{ .Values.frontend.service.port }}
+    - host: {{ .Values.ingress.backendHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "rupmes.fullname" . }}-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.frontendHost }}
+      secretName: {{ .Values.ingress.tls.frontendSecretName }}
+    - hosts:
+        - {{ .Values.ingress.backendHost }}
+      secretName: {{ .Values.ingress.tls.backendSecretName }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.env
+production_connector/config.json
+production_connector/secrets.env
+production_connector/state/
+production_connector/logs/
+values-k3s-prod.yaml

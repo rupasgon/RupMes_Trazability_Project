@@ -1,0 +1,71 @@
+{{- if .Values.database.internal.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "rupmes.fullname" . }}-postgres
+  labels:
+    {{- include "rupmes.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.database.internal.user | quote }}
+  POSTGRES_PASSWORD: {{ .Values.database.internal.password | quote }}
+  POSTGRES_DB: {{ .Values.database.internal.db | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rupmes.fullname" . }}-postgres
+  labels:
+    {{- include "rupmes.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: {{ .Values.database.internal.service.port }}
+      targetPort: 5432
+      name: postgres
+  selector:
+    {{- include "rupmes.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "rupmes.fullname" . }}-postgres
+  labels:
+    {{- include "rupmes.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "rupmes.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "rupmes.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "rupmes.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.database.internal.image }}
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - secretRef:
+                name: {{ include "rupmes.fullname" . }}-postgres
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.database.internal.persistence.storageClassName }}
+        storageClassName: {{ .Values.database.internal.persistence.storageClassName }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.database.internal.persistence.size }}
+{{- end }}

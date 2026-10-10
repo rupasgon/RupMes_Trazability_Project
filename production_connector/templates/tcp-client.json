@@ -1,0 +1,49 @@
+{
+  "name": "line_a_tcp_client",
+  "api": {
+    "base_url": "https://api-rupmes.example.local",
+    "endpoint": "/production-reports/ingest",
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}",
+    "timeout_seconds": 30,
+    "verify_tls": true
+  },
+  "source": {
+    "type": "tcp",
+    "tcp_mode": "client",
+    "tcp_host": "192.168.10.50",
+    "tcp_port": 9000,
+    "tcp_framing": "newline",
+    "tcp_payload_format": "json",
+    "tcp_request": "GET_LAST_EVENT",
+    "tcp_request_append_newline": true,
+    "tcp_connect_timeout_seconds": 10,
+    "tcp_read_timeout_seconds": 10,
+    "date_field": "event_ts",
+    "id_field": "sequence_id",
+    "checkpoint_mode": "datetime",
+    "timestamp_source": "source"
+  },
+  "payload": {
+    "required_fields": ["line_code", "serial_number", "result", "production_datetime"],
+    "drop_null_fields": true,
+    "mappings": {
+      "line_code": { "constant": "LINE-A" },
+      "serial_number": { "source": "serial_number", "transform": "string" },
+      "result": { "source": "result", "transform": "string" },
+      "production_datetime": { "source": "event_ts", "transform": "datetime" },
+      "source_system": { "constant": "LINE-A-TCP" }
+    }
+  },
+  "state": {
+    "checkpoint_file": "production_connector/state/line_a_tcp.json",
+    "initial_value": "2026-01-01T00:00:00"
+  },
+  "runtime": {
+    "poll_interval_seconds": 10,
+    "log_level": "INFO",
+    "dry_run": true,
+    "stop_on_error": false,
+    "max_batches_per_cycle": 100
+  }
+}
