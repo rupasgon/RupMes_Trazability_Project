@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RupMES Edge - Demo Line</title>
+    <style>
+      :root { color-scheme: dark; --ink:#eaf0e8; --muted:#94a59d; --panel:#15201d; --line:#2a3a34; --run:#27bc73; --idle:#e7b84b; --fault:#ef5d5d; --manual:#4d9de0; --down:#708078; }
+      * { box-sizing: border-box; } body { margin:0; min-height:100vh; color:var(--ink); font-family: "Segoe UI", sans-serif; background:radial-gradient(circle at top left,#27483d 0,transparent 35%),#0c1411; }
+      header { padding:30px 4vw 20px; display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid var(--line); } h1 { margin:0; letter-spacing:.04em; font-size:clamp(1.6rem,3vw,2.6rem); } .eyebrow,.muted { color:var(--muted); } .status { font-weight:700; padding:8px 12px; border-radius:999px; background:#23322c; } .summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; padding:20px 4vw; } .summary div,.station { background:linear-gradient(135deg,#1b2a25,#121d19); border:1px solid var(--line); border-radius:14px; } .summary div { padding:15px; } .summary strong { font-size:1.65rem; display:block; margin-top:5px; } main { padding:0 4vw 4vw; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; } .station { padding:18px; border-left:7px solid var(--down); } .station.RUNNING { border-left-color:var(--run); } .station.IDLE { border-left-color:var(--idle); } .station.FAULT,.station.STOPPED { border-left-color:var(--fault); } .station.MANUAL { border-left-color:var(--manual); } .station h2 { margin:0 0 14px; font-size:1.2rem; } .pill { float:right; font-size:.75rem; border:1px solid currentColor; border-radius:99px; padding:4px 8px; } .grid { clear:both; display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-top:20px; } .label { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.07em; } .value { font-size:1.25rem; margin-top:3px; } .fault-note { color:#ff9696; margin-top:15px; font-weight:700; } @media (max-width:600px) { header { align-items:flex-start; gap:12px; flex-direction:column; } .summary { grid-template-columns:1fr; } }
+    </style>
+  </head>
+  <body>
+    <header><div><div class="eyebrow">LOCAL OPC UA DEMO · READ ONLY</div><h1 id="line-name">RupMES Edge</h1></div><div id="connection" class="status">CONNECTING</div></header>
+    <section class="summary"><div><span class="label">Total pieces</span><strong id="total-parts">0</strong></div><div><span class="label">Active alarms</span><strong id="alarms">0</strong></div><div><span class="label">Last refresh</span><strong id="updated">--:--:--</strong></div></section>
+    <main id="stations"></main>
+    <script>
+      const format = value => value == null ? "--" : Number(value).toFixed(1);
+      async function refresh() {
+        try {
+          const data = await (await fetch('/edge/api/snapshot', {cache:'no-store'})).json();
+          document.querySelector('#line-name').textContent = data.line_name;
+          const connection = document.querySelector('#connection');
+          connection.textContent = data.connection.connected ? 'OPC UA CONNECTED' : 'OPC UA DISCONNECTED';
+          connection.style.color = data.connection.connected ? '#72e5a7' : '#ff9696';
+          document.querySelector('#total-parts').textContent = data.total_parts;
+          document.querySelector('#alarms').textContent = data.active_alarms;
+          document.querySelector('#updated').textContent = new Date(data.generated_at).toLocaleTimeString();
+          document.querySelector('#stations').innerHTML = data.stations.map(s => `
+            <article class="station ${s.state}"><h2>${s.name}<span class="pill">${s.state}</span></h2>
+              <div class="grid"><div><div class="label">Last cycle</div><div class="value">${format(s.last_cycle_seconds)} s</div></div><div><div class="label">Target</div><div class="value">${format(s.target_cycle_seconds)} s</div></div>
+              <div><div class="label">Parts</div><div class="value">${s.parts_counter ?? '--'}</div></div><div><div class="label">Average</div><div class="value">${format(s.average_cycle_seconds)} s</div></div></div>
+              ${s.alarm_code ? `<div class="fault-note">ALARM ${s.alarm_code}</div>` : ''}</article>`).join('');
+        } catch (error) { document.querySelector('#connection').textContent = 'DASHBOARD API UNAVAILABLE'; }
+      }
+      refresh(); setInterval(refresh, 1000);
+    </script>
+  </body>
+</html>

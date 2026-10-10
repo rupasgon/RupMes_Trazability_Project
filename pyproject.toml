@@ -35,6 +35,12 @@ connector = [
 connector-build = [
   "PyInstaller>=6.0",
 ]
+edge = [
+  "asyncua>=1.1",
+]
+
+[project.scripts]
+rupmes-edge = "rupmes_edge.__main__:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

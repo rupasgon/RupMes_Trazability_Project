@@ -1,0 +1,43 @@
+{
+  "config_version": 1,
+  "line_id": "LINE_01",
+  "line_name": "Production Line 01",
+  "timezone": "Europe/Madrid",
+  "demo_mode": false,
+  "storage": { "database_path": "data/rupmes-edge.db", "retention_days": 90 },
+  "admin": { "bind_host": "127.0.0.1", "port": 8020, "token_secret_ref": "RUPMES_EDGE_ADMIN_TOKEN" },
+  "endpoints": [
+    {
+      "endpoint_id": "plc_01",
+      "url": "opc.tcp://plc-line-01.ot.local:4840",
+      "subscription_interval_ms": 500,
+      "username": "rupmes_monitor",
+      "password_secret_ref": "RUPMES_EDGE_PLC_01_PASSWORD",
+      "security": {
+        "policy": "Basic256Sha256",
+        "mode": "SignAndEncrypt",
+        "client_certificate_path": "certs/client.der",
+        "private_key_path": "certs/client-key.pem",
+        "server_certificate_path": "certs/plc-01.der"
+      }
+    }
+  ],
+  "stations": [
+    {
+      "station_id": "ST01",
+      "name": "Station 01",
+      "endpoint_id": "plc_01",
+      "target_cycle_seconds": 20,
+      "stale_after_seconds": 5,
+      "node_map": {
+        "Running": "ns=3;s=Line1.Station1.Running",
+        "CycleComplete": "ns=3;s=Line1.Station1.CycleComplete",
+        "CycleTime": "ns=3;s=Line1.Station1.CycleTime",
+        "PartsCounter": "ns=3;s=Line1.Station1.PartsCounter",
+        "FaultActive": "ns=3;s=Line1.Station1.FaultActive",
+        "AutoMode": "ns=3;s=Line1.Station1.AutoMode",
+        "AlarmCode": "ns=3;s=Line1.Station1.AlarmCode"
+      }
+    }
+  ]
+}
