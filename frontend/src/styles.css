@@ -331,7 +331,8 @@ body {
 }
 
 .nav-group-panel.open {
-  max-height: 220px;
+  /* Maestros contains six entries; 220px clipped the final Rutas link. */
+  max-height: 360px;
   opacity: 1;
 }
 
@@ -1089,6 +1090,32 @@ select.inline-input {
   font-size: 13px;
 }
 
+.notice.success,
+.notice.error,
+.notice.info {
+  padding: 10px 12px;
+  border: 1px solid;
+  border-radius: 10px;
+}
+
+.notice.success {
+  color: var(--accent);
+  border-color: rgba(35, 196, 166, 0.42);
+  background: rgba(35, 196, 166, 0.1);
+}
+
+.notice.error {
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.notice.info {
+  color: var(--badge-text);
+  border-color: rgba(76, 184, 255, 0.42);
+  background: var(--badge-bg);
+}
+
 .crud-layout {
   display: grid;
   gap: 20px;
@@ -1673,8 +1700,24 @@ select.inline-input {
 
 .production-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 2px 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+}
+
+.production-form-grid > * {
+  min-width: 0;
+}
+
+.production-form-grid .field {
+  margin-bottom: 0;
+}
+
+.production-form-grid input,
+.production-form-grid select,
+.production-form-grid textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Allow long master-data labels to shrink inside their grid column. */

@@ -10,7 +10,7 @@
   },
   "source": {
     "type": "sql",
-    "connection_url": "mysql+pymysql://user:password@localhost:3306/source_database",
+    "connection_url": "${ENV:RUPMES_SOURCE_DATABASE_URL}",
     "schema": null,
     "table": "process_results",
     "date_field": "result_timestamp",

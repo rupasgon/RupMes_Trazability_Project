@@ -3,37 +3,158 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>RupMES Edge - Demo Line</title>
+    <title>RupMES Edge</title>
     <style>
-      :root { color-scheme: dark; --ink:#eaf0e8; --muted:#94a59d; --panel:#15201d; --line:#2a3a34; --run:#27bc73; --idle:#e7b84b; --fault:#ef5d5d; --manual:#4d9de0; --down:#708078; }
-      * { box-sizing: border-box; } body { margin:0; min-height:100vh; color:var(--ink); font-family: "Segoe UI", sans-serif; background:radial-gradient(circle at top left,#27483d 0,transparent 35%),#0c1411; }
-      header { padding:30px 4vw 20px; display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid var(--line); } h1 { margin:0; letter-spacing:.04em; font-size:clamp(1.6rem,3vw,2.6rem); } .eyebrow,.muted { color:var(--muted); } .status { font-weight:700; padding:8px 12px; border-radius:999px; background:#23322c; } .summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; padding:20px 4vw; } .summary div,.station { background:linear-gradient(135deg,#1b2a25,#121d19); border:1px solid var(--line); border-radius:14px; } .summary div { padding:15px; } .summary strong { font-size:1.65rem; display:block; margin-top:5px; } main { padding:0 4vw 4vw; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; } .station { padding:18px; border-left:7px solid var(--down); } .station.RUNNING { border-left-color:var(--run); } .station.IDLE { border-left-color:var(--idle); } .station.FAULT,.station.STOPPED { border-left-color:var(--fault); } .station.MANUAL { border-left-color:var(--manual); } .station h2 { margin:0 0 14px; font-size:1.2rem; } .pill { float:right; font-size:.75rem; border:1px solid currentColor; border-radius:99px; padding:4px 8px; } .grid { clear:both; display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-top:20px; } .label { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.07em; } .value { font-size:1.25rem; margin-top:3px; } .fault-note { color:#ff9696; margin-top:15px; font-weight:700; } @media (max-width:600px) { header { align-items:flex-start; gap:12px; flex-direction:column; } .summary { grid-template-columns:1fr; } }
+      :root { color-scheme: dark; --ink:#edf6f1; --muted:#9bb0a5; --panel:#15221d; --panel-2:#101a16; --line:#2b4137; --run:#35c77a; --idle:#e8b84b; --fault:#ef6060; --manual:#57a6e7; --down:#77847d; --accent:#7ad8ad; }
+      * { box-sizing:border-box; } body { margin:0; min-height:100vh; color:var(--ink); font-family:"Segoe UI",system-ui,sans-serif; background:radial-gradient(circle at top left,#244f40 0,transparent 34%),#0a120f; }
+      header { padding:27px 4vw 20px; display:flex; justify-content:space-between; gap:18px; align-items:flex-end; border-bottom:1px solid var(--line); } h1 { margin:2px 0 0; letter-spacing:.035em; font-size:clamp(1.7rem,3vw,2.7rem); } h2,h3,p { margin-top:0; } .eyebrow,.muted,.label { color:var(--muted); } .eyebrow,.label { font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; font-weight:700; } .status { font-weight:700; padding:9px 13px; border:1px solid #365849; border-radius:999px; background:#152a21; white-space:nowrap; }
+      .kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; padding:20px 4vw; } .kpi,.station,.side-card { border:1px solid var(--line); border-radius:14px; background:linear-gradient(140deg,var(--panel),var(--panel-2)); } .kpi { padding:15px; min-height:105px; } .kpi strong { display:block; margin:7px 0 2px; font-size:1.7rem; line-height:1; } .kpi .detail { color:var(--muted); font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(270px,22vw); gap:17px; padding:0 4vw 4vw; } .stations { display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:14px; } .station { padding:17px; border-left:7px solid var(--down); min-height:245px; } .station.RUNNING { border-left-color:var(--run); } .station.IDLE { border-left-color:var(--idle); } .station.FAULT,.station.STOPPED { border-left-color:var(--fault); } .station.MANUAL { border-left-color:var(--manual); } .station-head { display:flex; justify-content:space-between; gap:9px; align-items:flex-start; } .station h2 { margin:0; font-size:1.1rem; } .station-code { margin-top:3px; color:var(--muted); font-size:.8rem; } .pill { font-size:.7rem; border:1px solid currentColor; border-radius:99px; padding:4px 8px; font-weight:700; } .output { color:var(--accent); font-size:.68rem; letter-spacing:.07em; font-weight:700; margin-top:8px; }
+      .station-grid { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-top:19px; } .value { margin-top:3px; font-size:1.2rem; } .value.negative { color:#ff9696; } .station-footer { display:flex; justify-content:space-between; gap:12px; margin-top:18px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:.78rem; } .fault-note { margin-top:14px; color:#ff9696; font-size:.88rem; font-weight:700; }
+      aside { display:grid; align-content:start; gap:14px; } .side-card { padding:16px; } .side-card h3 { font-size:1rem; margin-bottom:14px; } .issue,.endpoint { border-top:1px solid var(--line); padding:11px 0; } .issue:first-of-type,.endpoint:first-of-type { border-top:0; padding-top:0; } .issue strong,.endpoint strong { display:block; font-size:.9rem; } .issue span,.endpoint span { color:var(--muted); display:block; font-size:.8rem; margin-top:3px; } .indicator { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--down); } .indicator.good { background:var(--run); } .indicator.bad { background:var(--fault); } .empty { color:var(--muted); font-size:.88rem; }
+      @media (max-width:1050px) { .kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } .layout { grid-template-columns:1fr; } aside { grid-template-columns:repeat(2,minmax(0,1fr)); } } @media (max-width:620px) { header { flex-direction:column; align-items:flex-start; } .kpis,aside { grid-template-columns:1fr; } .layout { padding-bottom:24px; } }
     </style>
   </head>
   <body>
-    <header><div><div class="eyebrow">LOCAL OPC UA DEMO · READ ONLY</div><h1 id="line-name">RupMES Edge</h1></div><div id="connection" class="status">CONNECTING</div></header>
-    <section class="summary"><div><span class="label">Total pieces</span><strong id="total-parts">0</strong></div><div><span class="label">Active alarms</span><strong id="alarms">0</strong></div><div><span class="label">Last refresh</span><strong id="updated">--:--:--</strong></div></section>
-    <main id="stations"></main>
+    <header><div><div class="eyebrow">RupMES Edge · local read-only dashboard</div><h1 id="line-name">RupMES Edge</h1></div><div id="connection" class="status">CONNECTING</div></header>
+    <section class="kpis">
+      <div class="kpi"><span class="label">Line output</span><strong id="line-parts">--</strong><span id="line-parts-detail" class="detail">Output station not configured</span></div>
+      <div class="kpi"><span class="label">Stations running</span><strong id="running">0 / 0</strong><span id="running-detail" class="detail">--</span></div>
+      <div class="kpi"><span class="label">Active alarms</span><strong id="alarms">0</strong><span id="alarms-detail" class="detail">No active faults</span></div>
+      <div class="kpi"><span class="label">Observed cycles</span><strong id="cycles">0</strong><span id="cycles-detail" class="detail">0 over target</span></div>
+      <div class="kpi"><span class="label">Current bottleneck</span><strong id="bottleneck">--</strong><span id="bottleneck-detail" class="detail">Waiting for cycles</span></div>
+    </section>
+    <div class="layout"><main id="stations" class="stations"></main><aside><section class="side-card"><h3>Attention required</h3><div id="issues"></div></section><section class="side-card"><h3>OPC UA endpoints</h3><div id="endpoints"></div><p class="muted" style="margin:14px 0 0;font-size:.78rem">Last refresh: <span id="updated">--:--:--</span></p></section></aside></div>
     <script>
-      const format = value => value == null ? "--" : Number(value).toFixed(1);
+      const number = value => value == null ? '--' : Number(value).toFixed(1);
+      const time = value => value ? new Date(value).toLocaleTimeString() : '--';
+      const escape = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      const stationCard = station => {
+        const deviation = station.cycle_deviation_seconds;
+        const mode = station.auto_mode === false ? 'Manual' : station.auto_mode === true ? 'Automatic' : 'Mode unavailable';
+        return `<article class="station ${escape(station.state)}"><div class="station-head"><div><h2>${escape(station.name)}</h2><div class="station-code">${escape(station.id)}</div>${station.is_output_station ? '<div class="output">LINE OUTPUT STATION</div>' : ''}</div><span class="pill">${escape(station.state)}</span></div><div class="station-grid"><div><div class="label">Last cycle</div><div class="value">${number(station.last_cycle_seconds)} s</div></div><div><div class="label">Target</div><div class="value">${number(station.target_cycle_seconds)} s</div></div><div><div class="label">Deviation</div><div class="value ${deviation > 0 ? 'negative' : ''}">${deviation == null ? '--' : `${deviation > 0 ? '+' : ''}${number(deviation)} s`}</div></div><div><div class="label">Parts counter</div><div class="value">${station.parts_counter ?? '--'}</div></div><div><div class="label">Average cycle</div><div class="value">${number(station.average_cycle_seconds)} s</div></div><div><div class="label">Cycles over target</div><div class="value">${station.cycles_over_target}</div></div></div>${station.alarm_code ? `<div class="fault-note">ACTIVE ALARM · ${escape(station.alarm_code)}</div>` : ''}<div class="station-footer"><span>${mode}</span><span>Updated ${time(station.last_update)}</span></div></article>`;
+      };
       async function refresh() {
         try {
-          const data = await (await fetch('/edge/api/snapshot', {cache:'no-store'})).json();
+          const response = await fetch('/edge/api/snapshot', {cache:'no-store'});
+          if (!response.ok) throw new Error('Snapshot unavailable');
+          const data = await response.json(); const counts = data.state_counts || {};
           document.querySelector('#line-name').textContent = data.line_name;
-          const connection = document.querySelector('#connection');
-          connection.textContent = data.connection.connected ? 'OPC UA CONNECTED' : 'OPC UA DISCONNECTED';
-          connection.style.color = data.connection.connected ? '#72e5a7' : '#ff9696';
-          document.querySelector('#total-parts').textContent = data.total_parts;
-          document.querySelector('#alarms').textContent = data.active_alarms;
-          document.querySelector('#updated').textContent = new Date(data.generated_at).toLocaleTimeString();
-          document.querySelector('#stations').innerHTML = data.stations.map(s => `
-            <article class="station ${s.state}"><h2>${s.name}<span class="pill">${s.state}</span></h2>
-              <div class="grid"><div><div class="label">Last cycle</div><div class="value">${format(s.last_cycle_seconds)} s</div></div><div><div class="label">Target</div><div class="value">${format(s.target_cycle_seconds)} s</div></div>
-              <div><div class="label">Parts</div><div class="value">${s.parts_counter ?? '--'}</div></div><div><div class="label">Average</div><div class="value">${format(s.average_cycle_seconds)} s</div></div></div>
-              ${s.alarm_code ? `<div class="fault-note">ALARM ${s.alarm_code}</div>` : ''}</article>`).join('');
-        } catch (error) { document.querySelector('#connection').textContent = 'DASHBOARD API UNAVAILABLE'; }
+          const connection = document.querySelector('#connection'); connection.textContent = data.connection.connected ? 'OPC UA CONNECTED' : 'OPC UA DEGRADED'; connection.style.color = data.connection.connected ? '#72e5a7' : '#ff9696';
+          document.querySelector('#line-parts').textContent = data.line_parts ?? '--'; document.querySelector('#line-parts-detail').textContent = data.line_parts_station ? `From ${data.line_parts_station}` : 'Output station not configured';
+          document.querySelector('#running').textContent = `${counts.RUNNING || 0} / ${data.stations.length}`; document.querySelector('#running-detail').textContent = `${counts.IDLE || 0} idle · ${counts.MANUAL || 0} manual`;
+          document.querySelector('#alarms').textContent = data.active_alarms; document.querySelector('#alarms-detail').textContent = data.active_alarms ? `${data.active_alarms} station(s) in fault` : 'No active faults';
+          document.querySelector('#cycles').textContent = data.completed_cycles; document.querySelector('#cycles-detail').textContent = `${data.cycles_over_target} over target`;
+          document.querySelector('#bottleneck').textContent = data.bottleneck ? data.bottleneck.name : '--'; document.querySelector('#bottleneck-detail').textContent = data.bottleneck ? `${number(data.bottleneck.average_cycle_seconds)} s average / ${number(data.bottleneck.target_cycle_seconds)} s target` : 'Waiting for cycles';
+          document.querySelector('#updated').textContent = time(data.generated_at); document.querySelector('#stations').innerHTML = data.stations.map(stationCard).join('');
+          const attention = data.stations.filter(s => ['FAULT','STOPPED','DISCONNECTED','MANUAL'].includes(s.state)); document.querySelector('#issues').innerHTML = attention.length ? attention.map(s => `<div class="issue"><strong>${escape(s.name)} · ${escape(s.state)}</strong><span>${s.alarm_code ? `Alarm ${escape(s.alarm_code)}` : `Last signal ${time(s.last_update)}`}</span></div>`).join('') : '<p class="empty">No stations require attention.</p>';
+          const endpointEntries = Object.entries(data.connection.endpoints || {}); document.querySelector('#endpoints').innerHTML = endpointEntries.length ? endpointEntries.map(([id, endpoint]) => `<div class="endpoint"><strong><i class="indicator ${endpoint.connected ? 'good' : 'bad'}"></i>${escape(id)}</strong><span>${endpoint.connected ? 'Connected' : escape(endpoint.error || 'Disconnected')}</span></div>`).join('') : '<p class="empty">Waiting for endpoint connection.</p>';
+        } catch (error) { const connection = document.querySelector('#connection'); connection.textContent = 'DASHBOARD API UNAVAILABLE'; connection.style.color = '#ff9696'; }
       }
       refresh(); setInterval(refresh, 1000);
     </script>
-  </body>
+  <style>
+    .station, .station-card { cursor:pointer; }
+    .station:focus, .station-card:focus { outline:2px solid #6ea7ff; outline-offset:3px; }
+    #station-history-modal[hidden] { display:none; }
+    #station-history-modal { position:fixed; inset:0; z-index:100; padding:clamp(14px,4vw,48px); background:#020713cc; overflow:auto; }
+    .history-dialog { max-width:1120px; margin:auto; padding:22px; border:1px solid #344661; border-radius:14px; background:#0b1728; box-shadow:0 20px 80px #000a; }
+    .history-head { display:flex; gap:12px; justify-content:space-between; align-items:center; margin-bottom:18px; }
+    .history-head h2 { margin:0; } .history-controls { display:flex; gap:10px; align-items:center; }
+    .history-controls input,.history-close { border:1px solid #496584; border-radius:7px; background:#12243c; color:#ecf4ff; padding:8px 10px; }
+    .history-close { cursor:pointer; font-weight:700; }
+    .history-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .history-panel { min-height:230px; padding:15px; border:1px solid #29405c; border-radius:10px; background:#0d1c30; }
+    .history-panel h3 { margin:0 0 8px; font-size:15px; } .history-empty { color:#93a7c2; padding:54px 0; text-align:center; }
+    .history-svg { width:100%; height:170px; display:block; overflow:visible; } .history-axis { color:#93a7c2; font-size:10px; }
+    .history-events { max-height:170px; overflow:auto; } .history-event { display:flex; justify-content:space-between; border-bottom:1px solid #29405c; padding:8px 0; }
+    @media(max-width:720px) { .history-grid { grid-template-columns:1fr; } .history-controls { flex-wrap:wrap; justify-content:flex-end; } }
+  </style>
+  <div id="station-history-modal" hidden aria-hidden="true">
+    <section class="history-dialog" role="dialog" aria-modal="true" aria-labelledby="station-history-title">
+      <div class="history-head"><div><div class="eyebrow">Daily history</div><h2 id="station-history-title">Station</h2></div><div class="history-controls"><input id="station-history-date" type="date"><button class="history-close" type="button">Close</button></div></div>
+      <div id="station-history-content" class="history-grid"><div class="history-empty">Loading history…</div></div>
+    </section>
+  </div>
+  <script>
+    (() => {
+      const modal = document.querySelector('#station-history-modal');
+      const title = document.querySelector('#station-history-title');
+      const dateInput = document.querySelector('#station-history-date');
+      const content = document.querySelector('#station-history-content');
+      let selectedStation = null;
+      dateInput.value = new Date().toLocaleDateString('en-CA');
+
+      const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+      const time = value => new Date(value).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const number = value => Number(value).toLocaleString(undefined, {maximumFractionDigits:1});
+
+      function chart(titleText, rows, valueKey, unit, target) {
+        if (!rows.length) return `<section class="history-panel"><h3>${titleText}</h3><div class="history-empty">No data recorded for this day yet.</div></section>`;
+        const values = rows.map(row => Number(row[valueKey])).filter(Number.isFinite);
+        const minimum = Math.min(...values, target ?? Infinity);
+        const maximum = Math.max(...values, target ?? -Infinity);
+        const span = maximum - minimum || 1;
+        const points = rows.map((row, index) => `${index * (100 / Math.max(rows.length - 1, 1))},${94 - ((Number(row[valueKey]) - minimum) / span) * 82}`).join(' ');
+        const targetY = target == null ? '' : `<line x1="0" x2="100" y1="${94 - ((target - minimum) / span) * 82}" y2="${94 - ((target - minimum) / span) * 82}" stroke="#ffbf52" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`;
+        return `<section class="history-panel"><h3>${titleText}</h3><svg class="history-svg" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${titleText}"><line x1="0" x2="100" y1="94" y2="94" stroke="#496584" vector-effect="non-scaling-stroke"/>${targetY}<polyline fill="none" stroke="#6ea7ff" stroke-width="2" vector-effect="non-scaling-stroke" points="${points}"/></svg><div class="history-axis"><span>${time(rows[0].observed_at)}</span> · ${number(minimum)}–${number(maximum)} ${unit} · <span>${time(rows[rows.length - 1].observed_at)}</span></div></section>`;
+      }
+
+      function stateHistory(rows) {
+        if (!rows.length) return `<section class="history-panel"><h3>Station states</h3><div class="history-empty">No state changes recorded for this day yet.</div></section>`;
+        return `<section class="history-panel"><h3>Station states</h3><div class="history-events">${rows.map(row => `<div class="history-event"><span>${time(row.observed_at)}</span><strong>${esc(row.state)}</strong></div>`).join('')}</div></section>`;
+      }
+
+      async function loadHistory() {
+        if (!selectedStation) return;
+        content.innerHTML = '<div class="history-empty">Loading history…</div>';
+        try {
+          const response = await fetch(`/edge/api/stations/${encodeURIComponent(selectedStation.id)}/daily?selected_date=${encodeURIComponent(dateInput.value)}`, {cache:'no-store'});
+          if (!response.ok) throw new Error('History request failed');
+          const history = await response.json();
+          content.innerHTML = [
+            chart('Cycle duration', history.cycles, 'cycle_seconds', 's', selectedStation.target_cycle_seconds),
+            chart('Parts counter', history.counters, 'parts'),
+            stateHistory(history.states),
+            `<section class="history-panel"><h3>Daily summary</h3><div class="history-event"><span>Recorded cycles</span><strong>${history.cycles.length}</strong></div><div class="history-event"><span>Counter samples</span><strong>${history.counters.length}</strong></div><div class="history-event"><span>State changes</span><strong>${history.states.length}</strong></div></section>`
+          ].join('');
+        } catch (error) {
+          content.innerHTML = `<div class="history-empty">Could not load station history: ${esc(error.message)}</div>`;
+        }
+      }
+
+      function openHistory(id, name, target) {
+        selectedStation = {id, name, target_cycle_seconds:Number(target)};
+        title.textContent = `${name} · daily history`;
+        modal.hidden = false; modal.setAttribute('aria-hidden', 'false');
+        loadHistory();
+      }
+
+      function closeHistory() { modal.hidden = true; modal.setAttribute('aria-hidden', 'true'); }
+      document.querySelector('.history-close').addEventListener('click', closeHistory);
+      modal.addEventListener('click', event => { if (event.target === modal) closeHistory(); });
+      dateInput.addEventListener('change', loadHistory);
+      document.addEventListener('keydown', event => { if (event.key === 'Escape') closeHistory(); });
+
+      let latestStations = [];
+      async function makeCardsInteractive() {
+        try {
+          latestStations = (await (await fetch('/edge/api/snapshot', {cache:'no-store'})).json()).stations || [];
+          const cards = [...document.querySelectorAll('.station, .station-card')];
+          cards.forEach((card, index) => {
+            const station = latestStations[index];
+            if (!station || card.dataset.historyReady) return;
+            card.dataset.historyReady = 'true'; card.tabIndex = 0; card.setAttribute('role', 'button');
+            card.setAttribute('aria-label', `Open daily history for ${station.name}`);
+            const open = () => openHistory(station.station_id || station.id, station.name, station.target_cycle_seconds);
+            card.addEventListener('click', open);
+            card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
+          });
+        } catch (_) { /* The normal dashboard retry remains responsible for connection errors. */ }
+      }
+      new MutationObserver(makeCardsInteractive).observe(document.body, {childList:true, subtree:true});
+      setInterval(makeCardsInteractive, 1500); makeCardsInteractive();
+    })();
+  </script>
+</body>
 </html>

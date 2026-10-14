@@ -21,7 +21,7 @@ export default function StatusesPage({ auth, onLogout, tenantId, setTenantId, cs
 
   useEffect(() => {
     loadStatuses().catch(() => {});
-  }, []);
+  }, [tenantId]);
 
   const handleCreate = async (event) => {
     event.preventDefault();

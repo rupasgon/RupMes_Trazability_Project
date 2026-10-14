@@ -11,6 +11,7 @@ Portal MES con backend FastAPI, frontend React/Vite y esquema PostgreSQL para tr
 - Conector industrial externo: `production_connector/`
 - Despliegue Kubernetes/Helm: `deploy/helm/rupmes/`
 - Manual operativo editable: `Documentation/Manual_Operacion_RupMes.odt`
+- Guia de routing y trazabilidad dinamica: `Documentation/Routing_Traceability_Guide.md`
 
 ## Estructura
 
@@ -24,7 +25,7 @@ src/rupmes/
   views/          # API y CLI
 frontend/         # Portal React/Vite
 alembic/          # Migraciones
-production_connector/  # Conector SQL/MQTT/OPC UA
+production_connector/  # Conector SQL/MQTT/OPC UA/TCP/Modbus/S7
 ```
 
 ## Antes de arrancar
@@ -136,18 +137,6 @@ RUN_DB_SEED=true
 ```bash
 docker compose up --build
 ```
-
-### Prueba local aislada
-
-Si `.env` apunta a una base externa, no lo reutilices para pruebas. En PowerShell crea un archivo local y arranca un proyecto Compose separado:
-
-```powershell
-Copy-Item .env.local.example .env.local
-$env:ENV_FILE = ".env.local"
-docker compose --env-file .env.local -p rupmes-local up --build
-```
-
-Esto crea una base PostgreSQL local, aplica las migraciones y carga los datos iniciales. El portal queda en `http://localhost:18080`; el usuario inicial es `admin` y la contraseña es `admin123`.
 
 ### URLs
 
@@ -348,6 +337,37 @@ Lógica de seed:
 
 ## API principal
 
+## Entrega de reportes de producción al ERP
+
+Los conectores de planta siempre entregan primero a RupMes. La tabla
+`production_report` admite `WIP`, `FINISHED_PART` y `FINISHED_BOX`; los
+eventos WIP pueden no tener número de serie, mientras que piezas y cajas sí lo
+requieren. `quantity`, `unit_of_measure`, `container_serial`, `material_lot`
+y `source_event_id` conservan el contexto que necesitarán las reglas ERP.
+
+Las reglas de entrega creadas desde `integration-servers` e
+`integration-delivery-rules` se procesan mediante un buzón transaccional: un
+reporte queda reservado para una regla antes de iniciar la llamada HTTP y no
+se vuelve a seleccionar tras una entrega correcta. Para ejecutar un ciclo:
+
+```bash
+python -m rupmes deliver-erp-once
+```
+
+Para mantener el proceso activo (por ejemplo, como servicio separado del
+servidor web):
+
+```bash
+python -m rupmes deliver-erp --interval 30
+```
+
+`report_filter` admite campos de `production_report` (por ejemplo,
+`{"result":"OK","line_code":"LINE-A"}`) y `mapping_config` acepta el
+nombre de un campo, `{"field":"product_code"}`, una constante con
+`{"constant":"3"}` o `"count"` para la cantidad del lote. Si el servidor
+es `oracle_apex`, el ERP debe devolver un `id` positivo; la respuesta de
+duplicado `WO_PACK_FILE_LINE_CON` se considera confirmada.
+
 Arranque manual de backend:
 
 ```bash
@@ -365,6 +385,9 @@ Endpoints clave:
 - `GET /users`
 - `GET /items`
 - `GET /statuses`
+- `GET /routings`
+- `POST /routings/{routing_id}/processes`
+- `POST /routing-process-results/ingest`
 - `POST /production-reports`
 - `POST /production-reports/ingest`
 - `GET /production-ingest-clients`
@@ -385,6 +408,17 @@ Endpoints clave:
 
 - `POST /production-reports/ingest`
 - requiere `X-Client-Id` y `X-API-Key`
+
+### Trazabilidad por routing
+
+Para registrar el resultado de una operacion definida en un routing:
+
+- `POST /routing-process-results/ingest`
+- requiere `X-Client-Id` y `X-API-Key`
+- valida el modelo, routing, proceso, celda y esquema de resultados en el tenant del cliente tecnico
+- almacena el payload completo y extrae en la misma transaccion los campos marcados como reportables para analitica
+
+La configuracion paso a paso y un ejemplo de conector SQL estan en `Documentation/Routing_Traceability_Guide.md`.
 
 ### Gestión de credenciales técnicas
 
@@ -419,10 +453,14 @@ Hay un conector independiente para:
 - SQL
 - MQTT
 - OPC UA
+- TCP JSON
+- Modbus TCP/RTU
+- Siemens S7
 
 Documentación:
 
 - `production_connector/README.md`
+- `production_connector/PROTOCOLS.md`
 
 ## Alembic
 

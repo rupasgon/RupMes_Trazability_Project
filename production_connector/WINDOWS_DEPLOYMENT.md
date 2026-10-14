@@ -33,7 +33,7 @@ Do not copy the source repository.
 
 1. Copy the package to the target machine.
 2. Extract it if you copied the ZIP.
-3. Edit `production_connector\config.json` if included, or copy `config.template.json` to `config.json`.
+3. Edit `production_connector\config.json` if included, or copy `config.template.json` to `config.json`. For routing execution, start from `templates\routing-process-result.json`.
 4. Copy `production_connector\secrets.env.template` to `production_connector\secrets.env` and store the integration `client_id` and API key there.
 5. Copy the closest file from `production_connector\templates\` to `production_connector\config.json` when configuring TCP, Modbus or Siemens S7.
 6. Validate the configuration before installing the service:
@@ -49,6 +49,10 @@ cd C:\path\to\RupMesProductionConnector
 .\production_connector\windows\install-service.ps1 -ProjectRoot "C:\path\to\RupMesProductionConnector" -ConfigPath "C:\path\to\RupMesProductionConnector\production_connector\config.json"
 ```
 
+For multiple stations on one gateway, create one JSON file and one checkpoint file per station under `production_connector\configs\`, then pass that directory as `-ConfigPath`. Do not share `state.checkpoint_file` between stations.
+
+Routing station configurations must use `/routing-process-results/ingest`; generic production configurations use `/production-reports/ingest`. See `..\Documentation\Routing_Traceability_Guide.md` for mappings and result-field codes.
+
 ## Uninstall
 
 ```powershell
@@ -61,3 +65,4 @@ cd C:\path\to\RupMesProductionConnector
 - The client machine does not need Python preinstalled.
 - The packaging machine does need Python to generate the bundle.
 - SQL Server sources still require the Microsoft ODBC driver on the client machine.
+- Keep `secrets.env` protected for the service account. Do not copy it back to the development repository or store it in support archives.

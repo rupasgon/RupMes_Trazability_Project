@@ -7,6 +7,7 @@ const emptyFilters = {
   date_to: "",
   plant_code: "",
   line_code: "",
+  packaging_station_code: "GP12",
   trace_serial: "",
 };
 
@@ -50,6 +51,8 @@ export default function ReportsPage({
   const [okNokByShift, setOkNokByShift] = useState([]);
   const [ftqFpy, setFtqFpy] = useState([]);
   const [topDefects, setTopDefects] = useState([]);
+  const [packagingPartsCount, setPackagingPartsCount] = useState(0);
+  const [paretoMode, setParetoMode] = useState("events");
   const [cycleTimeByLine, setCycleTimeByLine] = useState([]);
   const [traceability, setTraceability] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -96,13 +99,14 @@ export default function ReportsPage({
     try {
       const analyticsFilters = buildAnalyticsFilters(filters);
       const query = toQuery(analyticsFilters);
-      const [daily, lines, shifts, quality, defects, cycle] = await Promise.all([
+      const [daily, lines, shifts, quality, defects, cycle, packaging] = await Promise.all([
         request(`/production-reports/analytics/daily-total?${query}`, { tenantId }),
         request(`/production-reports/analytics/by-line?${query}`, { tenantId }),
         request(`/production-reports/analytics/ok-nok-by-shift?${query}`, { tenantId }),
         request(`/production-reports/analytics/ftq-fpy?${query}`, { tenantId }),
-        request(`/production-reports/analytics/top-defects?${toQuery(analyticsFilters, { limit: 8 })}`, { tenantId }),
+        request(`/production-reports/analytics/top-defects?${toQuery(analyticsFilters, { limit: 8, aggregation: paretoMode })}`, { tenantId }),
         request(`/production-reports/analytics/average-cycle-time?${query}`, { tenantId }),
+        request(`/production-reports/analytics/packaging-parts-count?${toQuery(analyticsFilters, { station_code: filters.packaging_station_code })}`, { tenantId }),
       ]);
       setDailyTotal(daily);
       setByLine(lines);
@@ -110,6 +114,7 @@ export default function ReportsPage({
       setFtqFpy(quality);
       setTopDefects(defects);
       setCycleTimeByLine(cycle);
+      setPackagingPartsCount(Number(packaging.parts_count || 0));
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -119,7 +124,7 @@ export default function ReportsPage({
 
   useEffect(() => {
     loadAnalytics().catch(() => {});
-  }, [canReports]);
+  }, [canReports, paretoMode, tenantId]);
 
   const handleTraceabilitySearch = async () => {
     if (!filters.trace_serial) {
@@ -269,6 +274,10 @@ export default function ReportsPage({
               <label>{t("reports.lineCode")}</label>
               <input value={filters.line_code} onChange={(event) => setFilters({ ...filters, line_code: event.target.value })} placeholder="LINE-A" />
             </div>
+            <div className="field">
+              <label>{t("reports.packagingStation")}</label>
+              <input value={filters.packaging_station_code} onChange={(event) => setFilters({ ...filters, packaging_station_code: event.target.value })} placeholder="GP12" />
+            </div>
           </div>
         </div>
       </div>
@@ -293,6 +302,11 @@ export default function ReportsPage({
           <span>{t("reports.kpiFpy")}</span>
           <strong>{formatPercent(summary.globalFpy)}</strong>
           <small>{t("reports.kpiFpyHint")}</small>
+        </div>
+        <div className="report-kpi report-kpi-production">
+          <span>{t("reports.kpiPackagingParts")}</span>
+          <strong>{packagingPartsCount}</strong>
+          <small>{t("reports.kpiPackagingPartsHint").replace("{station}", filters.packaging_station_code || "GP12")}</small>
         </div>
       </div>
 
@@ -383,7 +397,15 @@ export default function ReportsPage({
           <div className="section-head">
             <div>
               <h3>{t("reports.defectsTitle")}</h3>
-              <p className="muted">{t("reports.defectsSubtitle")}</p>
+              <p className="muted">{paretoMode === "events" ? t("reports.defectsSubtitle") : t("reports.defectsUniqueSubtitle")}</p>
+            </div>
+            <div className="row-space">
+              <button className={paretoMode === "events" ? "primary" : "secondary"} onClick={() => setParetoMode("events")}>
+                {t("reports.paretoIncludingRetests")}
+              </button>
+              <button className={paretoMode === "final_part_result" ? "primary" : "secondary"} onClick={() => setParetoMode("final_part_result")}>
+                {t("reports.paretoWithoutRetests")}
+              </button>
             </div>
           </div>
           <table className="table">

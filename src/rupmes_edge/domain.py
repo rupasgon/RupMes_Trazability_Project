@@ -23,6 +23,7 @@ class StationDefinition:
     target_cycle_seconds: float
     node_map: dict[str, str]
     endpoint_id: str = "default"
+    is_output_station: bool = False
 
 
 @dataclass
@@ -92,9 +93,12 @@ class LiveStation:
                 else None
             ),
             "parts_counter": self.parts_counter,
+            "is_output_station": self.definition.is_output_station,
             "completed_cycles": self.completed_cycles,
             "cycles_over_target": self.cycles_over_target,
             "alarm_code": self.signals.get("AlarmCode"),
+            "auto_mode": self.signals.get("AutoMode"),
+            "running": self.signals.get("Running"),
             "last_update": last_update,
         }
 

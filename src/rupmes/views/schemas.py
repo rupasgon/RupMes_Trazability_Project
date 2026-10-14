@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class StatusCreate(BaseModel):
@@ -235,16 +235,34 @@ class RoutingProcessResultRead(RoutingProcessResultCreate):
 class LineCreate(BaseModel):
     line_id: str = Field(..., max_length=50)
     description_line: str = Field(..., max_length=50)
+    plant_id: Optional[str] = Field(None, max_length=50)
 
 
 class LineRead(BaseModel):
     line_id: str
     description_line: str
+    plant_id: Optional[str] = None
     create_date: datetime
 
 
 class LineUpdate(BaseModel):
     description_line: Optional[str] = Field(None, max_length=50)
+    plant_id: Optional[str] = Field(None, max_length=50)
+
+
+class PlantCreate(BaseModel):
+    plant_id: str = Field(..., max_length=50)
+    description_plant: str = Field(..., max_length=100)
+
+
+class PlantRead(BaseModel):
+    plant_id: str
+    description_plant: str
+    create_date: datetime
+
+
+class PlantUpdate(BaseModel):
+    description_plant: Optional[str] = Field(None, max_length=100)
 
 
 class PlantCreate(BaseModel):
@@ -421,6 +439,7 @@ class UserStatusCatalogRead(BaseModel):
 
 
 AllowedProductionResult = Literal["OK", "NOK", "SCRAP", "REWORK"]
+ProductionReportType = Literal["WIP", "FINISHED_PART", "FINISHED_BOX"]
 
 
 class ProductionReportCreate(BaseModel):
@@ -433,7 +452,13 @@ class ProductionReportCreate(BaseModel):
     product_code: Optional[str] = Field(None, max_length=100)
     product_family: Optional[str] = Field(None, max_length=100)
     customer: Optional[str] = Field(None, max_length=100)
-    serial_number: str = Field(..., max_length=150)
+    report_type: ProductionReportType = "FINISHED_PART"
+    quantity: Decimal = Field(Decimal("1"), gt=0, decimal_places=3)
+    unit_of_measure: str = Field("EA", min_length=1, max_length=20)
+    serial_number: Optional[str] = Field(None, max_length=150)
+    container_serial: Optional[str] = Field(None, max_length=150)
+    material_lot: Optional[str] = Field(None, max_length=100)
+    source_event_id: Optional[str] = Field(None, max_length=150)
     result: AllowedProductionResult
     error_code: Optional[str] = Field(None, max_length=50)
     error_description: Optional[str] = None
@@ -453,13 +478,26 @@ class ProductionReportCreate(BaseModel):
     rework_datetime: Optional[datetime] = None
     source_system: Optional[str] = Field(None, max_length=100)
 
-    @field_validator("line_code", "serial_number")
+    @field_validator("line_code")
     @classmethod
     def validate_not_blank(cls, value: str) -> str:
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("Value cannot be empty")
         return cleaned
+
+    @model_validator(mode="after")
+    def validate_report_type(self) -> "ProductionReportCreate":
+        self.unit_of_measure = self.unit_of_measure.strip()
+        if not self.unit_of_measure:
+            raise ValueError("unit_of_measure cannot be empty")
+        if self.serial_number is not None:
+            self.serial_number = self.serial_number.strip() or None
+        if self.report_type in ("FINISHED_PART", "FINISHED_BOX") and not self.serial_number:
+            raise ValueError("serial_number is required for finished parts and boxes")
+        if self.report_type == "WIP" and not (self.product_code or self.material_lot or self.source_event_id):
+            raise ValueError("WIP reports need product_code, material_lot, or source_event_id")
+        return self
 
 
 class ProductionReportIngestCreate(ProductionReportCreate):
@@ -494,7 +532,13 @@ class ProductionReportRead(BaseModel):
     product_code: Optional[str]
     product_family: Optional[str]
     customer: Optional[str]
-    serial_number: str
+    report_type: ProductionReportType
+    quantity: Decimal
+    unit_of_measure: str
+    serial_number: Optional[str]
+    container_serial: Optional[str]
+    material_lot: Optional[str]
+    source_event_id: Optional[str]
     result: AllowedProductionResult
     error_code: Optional[str]
     error_description: Optional[str]
@@ -549,6 +593,11 @@ class TopDefectRead(BaseModel):
     error_code: str
     error_description: Optional[str]
     defect_count: int
+
+
+class PackagingPartsCountRead(BaseModel):
+    station_code: str
+    parts_count: int
 
 
 class AverageCycleTimeByLineRead(BaseModel):
@@ -616,6 +665,7 @@ class IntegrationServerCreate(BaseModel):
     protocol: str = Field(..., max_length=30)
     base_url: Optional[str] = Field(None, max_length=500)
     api_endpoint: Optional[str] = Field(None, max_length=500)
+    work_order_endpoint: Optional[str] = Field(None, max_length=500)
     auth_type: str = Field("none", max_length=30)
     secret_ref: Optional[str] = Field(None, max_length=200)
     oauth_client_id: Optional[str] = Field(None, max_length=500)
@@ -643,6 +693,7 @@ class IntegrationServerRead(BaseModel):
     protocol: str
     base_url: Optional[str]
     api_endpoint: Optional[str]
+    work_order_endpoint: Optional[str]
     auth_type: str
     secret_ref: Optional[str]
     credentials_configured: bool
@@ -660,6 +711,7 @@ class IntegrationServerUpdate(BaseModel):
     protocol: Optional[str] = Field(None, max_length=30)
     base_url: Optional[str] = Field(None, max_length=500)
     api_endpoint: Optional[str] = Field(None, max_length=500)
+    work_order_endpoint: Optional[str] = Field(None, max_length=500)
     auth_type: Optional[str] = Field(None, max_length=30)
     secret_ref: Optional[str] = Field(None, max_length=200)
     oauth_client_id: Optional[str] = Field(None, max_length=500)
@@ -678,6 +730,13 @@ class IntegrationDeliveryRuleCreate(BaseModel):
     report_filter: dict = Field(default_factory=dict)
     mapping_config: dict = Field(default_factory=dict)
     lot_mask: Optional[str] = Field(None, max_length=250)
+    external_type: Optional[str] = Field(None, max_length=100)
+    mes_lookup_enabled: bool = False
+    mes_server: Optional[str] = Field(None, max_length=250)
+    mes_database: Optional[str] = Field(None, max_length=250)
+    mes_username: Optional[str] = Field(None, max_length=250)
+    mes_password: Optional[str] = Field(None, max_length=1000)
+    mes_production_status: str = Field("IN PROGRESS", max_length=100)
     server_id: int
     dispatch_interval_seconds: int = Field(30, ge=1, le=86400)
     batch_size: int = Field(100, ge=1, le=10000)
@@ -704,6 +763,13 @@ class IntegrationDeliveryRuleUpdate(BaseModel):
     report_filter: Optional[dict] = None
     mapping_config: Optional[dict] = None
     lot_mask: Optional[str] = Field(None, max_length=250)
+    external_type: Optional[str] = Field(None, max_length=100)
+    mes_lookup_enabled: Optional[bool] = None
+    mes_server: Optional[str] = Field(None, max_length=250)
+    mes_database: Optional[str] = Field(None, max_length=250)
+    mes_username: Optional[str] = Field(None, max_length=250)
+    mes_password: Optional[str] = Field(None, max_length=1000)
+    mes_production_status: Optional[str] = Field(None, max_length=100)
     server_id: Optional[int] = None
     dispatch_interval_seconds: Optional[int] = Field(None, ge=1, le=86400)
     batch_size: Optional[int] = Field(None, ge=1, le=10000)

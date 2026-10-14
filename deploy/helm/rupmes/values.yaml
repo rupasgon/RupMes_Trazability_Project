@@ -47,6 +47,11 @@ backend:
     integrationSecretsKey: ""
   resources: {}
 
+erpDelivery:
+  enabled: false
+  intervalSeconds: 30
+  resources: {}
+
 database:
   external:
     enabled: true

@@ -9,7 +9,7 @@
   },
   "source": {
     "type": "sql",
-    "connection_url": "mysql+pymysql://user:pass@localhost:3306/mes_source",
+    "connection_url": "${ENV:RUPMES_SOURCE_DATABASE_URL}",
     "schema": null,
     "table": "production_events",
     "query": null,

@@ -21,7 +21,7 @@ export default function ModelsPage({ auth, onLogout, tenantId, setTenantId, csrf
 
   useEffect(() => {
     loadModels().catch(() => {});
-  }, []);
+  }, [tenantId]);
 
   const handleCreate = async (event) => {
     event.preventDefault();

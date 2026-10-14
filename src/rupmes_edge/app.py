@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import secrets
 from contextlib import asynccontextmanager
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
@@ -50,6 +52,13 @@ def create_app(config: EdgeConfig) -> FastAPI:
     @app.get("/edge/api/snapshot")
     def snapshot() -> dict:
         return runtime.snapshot()
+
+    @app.get("/edge/api/stations/{station_id}/daily")
+    def station_daily_history(station_id: str, selected_date: date | None = None) -> dict:
+        if station_id not in runtime.stations:
+            raise HTTPException(status_code=404, detail="Unknown station")
+        day = selected_date or datetime.now(ZoneInfo(config.timezone)).date()
+        return store.daily_history(station_id, day, config.timezone)
 
     @app.get("/edge/health")
     def health() -> dict:

@@ -1,6 +1,8 @@
+import asyncio
 from datetime import timedelta
 
 from rupmes_edge.domain import LiveStation, StationDefinition, StationState, utc_now
+from rupmes_edge.runtime import EdgeRuntime
 
 
 def station() -> LiveStation:
@@ -34,3 +36,22 @@ def test_cycle_complete_records_plc_cycle_time_once_per_pulse():
     assert live.completed_cycles == 1
     assert live.last_cycle_seconds == 21.5
     assert live.cycles_over_target == 1
+
+
+def test_snapshot_uses_the_configured_output_station_for_line_parts():
+    runtime = EdgeRuntime(
+        "Demo line",
+        [
+            StationDefinition("ST01", "Assembly", 20.0, {}, is_output_station=False),
+            StationDefinition("ST02", "Packing", 20.0, {}, is_output_station=True),
+        ],
+    )
+    now = utc_now()
+    runtime.set_endpoint_health("default", True)
+    asyncio.run(runtime.apply_update("ST01", "PartsCounter", 12, now))
+    asyncio.run(runtime.apply_update("ST02", "PartsCounter", 9, now))
+
+    snapshot = runtime.snapshot()
+
+    assert snapshot["line_parts"] == 9
+    assert snapshot["line_parts_station"] == "Packing"

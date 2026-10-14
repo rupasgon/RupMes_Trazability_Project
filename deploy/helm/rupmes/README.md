@@ -46,9 +46,9 @@ backend:
   env:
     frontendOrigins: "https://rupmes.example.local"
     cookieSecure: true
+    cookieDomain: ".example.local"
     multiTenantEnabled: true
     defaultTenantId: DEFAULT
-    productionIngestApiKey: "change-this"
 
 database:
   external:
@@ -71,6 +71,19 @@ ingress:
     frontendSecretName: rupmes-frontend-tls
     backendSecretName: rupmes-backend-tls
 ```
+
+Create the backend secret before the first release instead of storing database or ingest credentials in the values file:
+
+```bash
+kubectl create secret generic rupmes-rupmes-backend -n rupmes \
+  --from-literal=DATABASE_URL='postgresql+psycopg2://rupmes_user:password@postgres.example.local:5432/mes_db' \
+  --from-literal=PRODUCTION_INGEST_API_KEY='optional-legacy-global-key' \
+  --from-literal=INTEGRATION_SECRETS_KEY='a-32-byte-url-safe-base64-fernet-key'
+```
+
+`PRODUCTION_INGEST_API_KEY` is optional and retained for legacy integrations. For new equipment, create individual clients in **Administration > Integrations** and use their `X-Client-Id` and `X-API-Key` credentials.
+
+`INTEGRATION_SECRETS_KEY` is required before storing OAuth client credentials from the ERP server screen. Keep the same key for the life of the deployment; changing it makes previously configured credentials unreadable.
 
 ## 3. Deploy
 
@@ -99,3 +112,5 @@ Useful options:
 - If your database is empty, set `migrationJob.seed=true` only for the first install.
 - For production, keep `backend.env.runDbMigrations=false` and `backend.env.runDbSeed=false`; use the Helm migration job instead.
 - If you want PostgreSQL inside the cluster, set `database.external.enabled=false` and `database.internal.enabled=true`.
+- Set `backend.env.cookieDomain` only when portal and API use subdomains of the same parent domain, for example `.example.local`. Leave it empty for a single host or local development.
+- Use a new immutable image tag for every release. The portal footer exposes the deployed web and API versions for verification.

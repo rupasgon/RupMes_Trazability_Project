@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 
 
 def main() -> None:
@@ -21,10 +22,12 @@ def main() -> None:
         return
 
     from rupmes_edge.app import create_app
-    from rupmes_edge.config import demo_config, load_config
+    from rupmes_edge.config import default_config_path, demo_config, load_config
     import uvicorn
 
-    config = load_config(arguments.config) if arguments.config else demo_config()
+    configured_path = default_config_path()
+    use_external_config = bool(arguments.config or os.getenv("RUPMES_EDGE_CONFIG") or configured_path.exists())
+    config = load_config(arguments.config or configured_path) if use_external_config else demo_config()
     uvicorn.run(create_app(config), host=arguments.host or config.admin.bind_host, port=arguments.port or config.admin.port, reload=False)
 
 

@@ -62,6 +62,7 @@ class StationConfig(BaseModel):
     endpoint_id: str
     target_cycle_seconds: float = Field(gt=0, le=3600)
     stale_after_seconds: float = Field(default=5, ge=1, le=3600)
+    is_output_station: bool = False
     node_map: dict[str, str] = Field(min_length=1)
 
     @field_validator("node_map")
@@ -116,7 +117,7 @@ class EdgeConfig(BaseModel):
         return self
 
     def station_definitions(self) -> list[StationDefinition]:
-        return [StationDefinition(station_id=item.station_id, name=item.name, target_cycle_seconds=item.target_cycle_seconds, node_map=item.node_map, endpoint_id=item.endpoint_id) for item in self.stations]
+        return [StationDefinition(station_id=item.station_id, name=item.name, target_cycle_seconds=item.target_cycle_seconds, node_map=item.node_map, endpoint_id=item.endpoint_id, is_output_station=item.is_output_station) for item in self.stations]
 
     def sanitized(self) -> dict:
         result = self.model_dump()
@@ -151,8 +152,8 @@ def demo_config() -> EdgeConfig:
     stations = []
     for station_id, name, target in (("ST01", "Load station", 18.0), ("ST02", "Assembly station", 24.0), ("ST03", "Inspection station", 20.0), ("ST04", "Unload station", 16.0)):
         prefix = f"ns=2;s=Stations.{station_id}"
-        stations.append({"station_id": station_id, "name": name, "endpoint_id": "simulator", "target_cycle_seconds": target, "node_map": {metric: f"{prefix}.{metric}" for metric in ("Running", "CycleActive", "CycleComplete", "CycleTime", "PartsCounter", "FaultActive", "AutoMode", "AlarmCode", "Heartbeat")}})
-    return EdgeConfig.model_validate({"line_id": "DEMO", "line_name": "RupMES Demo Line", "demo_mode": True, "endpoints": [{"endpoint_id": "simulator", "url": SIMULATOR_ENDPOINT}], "stations": stations})
+        stations.append({"station_id": station_id, "name": name, "endpoint_id": "simulator", "target_cycle_seconds": target, "is_output_station": station_id == "ST04", "node_map": {metric: f"{prefix}.{metric}" for metric in ("Running", "CycleActive", "CycleComplete", "CycleTime", "PartsCounter", "FaultActive", "AutoMode", "AlarmCode", "Heartbeat")}})
+    return EdgeConfig.model_validate({"line_id": "DEMO", "line_name": "BMW Demo Line", "demo_mode": True, "endpoints": [{"endpoint_id": "simulator", "url": SIMULATOR_ENDPOINT}], "stations": stations})
 
 
 def config_to_json(config: EdgeConfig) -> str:

@@ -1,0 +1,38 @@
+{{- if .Values.erpDelivery.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rupmes.fullname" . }}-erp-delivery
+  labels:
+    {{- include "rupmes.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "rupmes.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: erp-delivery
+  template:
+    metadata:
+      labels:
+        {{- include "rupmes.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: erp-delivery
+    spec:
+      containers:
+        - name: erp-delivery
+          image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["python", "-m", "rupmes", "deliver-erp", "--interval", {{ .Values.erpDelivery.intervalSeconds | quote }}]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rupmes.fullname" . }}-backend
+                  key: DATABASE_URL
+            - name: INTEGRATION_SECRETS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rupmes.fullname" . }}-backend
+                  key: INTEGRATION_SECRETS_KEY
+          resources:
+            {{- toYaml .Values.erpDelivery.resources | nindent 12 }}
+{{- end }}

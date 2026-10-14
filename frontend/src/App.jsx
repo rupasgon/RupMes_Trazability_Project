@@ -11,6 +11,7 @@ import IntegrationServersPage from "./pages/IntegrationServersPage.jsx";
 import ItemsPage from "./pages/ItemsPage.jsx";
 import PlantsPage from "./pages/PlantsPage.jsx";
 import LinesPage from "./pages/LinesPage.jsx";
+import PlantsPage from "./pages/PlantsPage.jsx";
 import CellsPage from "./pages/CellsPage.jsx";
 import ModelsPage from "./pages/ModelsPage.jsx";
 import StatusesPage from "./pages/StatusesPage.jsx";
@@ -253,6 +254,7 @@ export default function App() {
             )
           }
         />
+        <Route path="/plants" element={auth ? <PlantsPage auth={auth} onLogout={handleLogout} tenantId={tenantId} setTenantId={setTenantId} csrfToken={csrfToken} t={t} lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} /> : <Navigate to="/login" replace />} />
         <Route
           path="/cells"
           element={

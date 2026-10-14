@@ -180,7 +180,55 @@ class ProductionReportRepository(BaseRepository):
         plant_code: str | None = None,
         line_code: str | None = None,
         limit: int = 10,
+        aggregation: str = "events",
     ):
+        if aggregation == "final_part_result":
+            # The Pareto must represent the latest result for each physical
+            # part in the selected period, rather than every failed attempt.
+            # The id tie-breaker keeps the result deterministic when events
+            # share the same timestamp.
+            base_stmt = select(
+                ProductionReport.id,
+                ProductionReport.serial_number,
+                case(
+                    (ProductionReport.rework_result.is_not(None), ProductionReport.rework_result),
+                    else_=ProductionReport.result,
+                ).label("result"),
+                ProductionReport.error_code,
+                ProductionReport.error_description,
+                ProductionReport.production_datetime,
+                func.row_number().over(
+                    partition_by=ProductionReport.serial_number,
+                    order_by=(ProductionReport.production_datetime.desc(), ProductionReport.id.desc()),
+                ).label("result_rank"),
+            ).where(ProductionReport.serial_number.is_not(None), ProductionReport.serial_number != "")
+            base_stmt = self._apply_filters(
+                base_stmt,
+                tenant_id=tenant_id,
+                date_from=date_from,
+                date_to=date_to,
+                plant_code=plant_code,
+                line_code=line_code,
+            )
+            final_results = base_stmt.subquery()
+            stmt = (
+                select(
+                    final_results.c.error_code,
+                    final_results.c.error_description,
+                    func.count().label("defect_count"),
+                )
+                .where(
+                    final_results.c.result_rank == 1,
+                    final_results.c.result == "NOK",
+                    final_results.c.error_code.is_not(None),
+                    final_results.c.error_code != "",
+                )
+                .group_by(final_results.c.error_code, final_results.c.error_description)
+                .order_by(func.count().desc(), final_results.c.error_code.asc())
+                .limit(limit)
+            )
+            return self.session.execute(stmt).all()
+
         stmt = select(
             ProductionReport.error_code,
             ProductionReport.error_description,
@@ -193,6 +241,30 @@ class ProductionReportRepository(BaseRepository):
             .limit(limit)
         )
         return self.session.execute(stmt).all()
+
+    def packaging_parts_count(
+        self,
+        station_code: str,
+        tenant_id: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        plant_code: str | None = None,
+        line_code: str | None = None,
+    ) -> int:
+        stmt = select(func.count(func.distinct(ProductionReport.serial_number))).where(
+            ProductionReport.station_code == station_code,
+            ProductionReport.serial_number.is_not(None),
+            ProductionReport.serial_number != "",
+        )
+        stmt = self._apply_filters(
+            stmt,
+            tenant_id=tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            plant_code=plant_code,
+            line_code=line_code,
+        )
+        return int(self.session.execute(stmt).scalar_one() or 0)
 
     def average_cycle_time_by_line(
         self,

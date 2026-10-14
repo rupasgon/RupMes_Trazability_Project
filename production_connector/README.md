@@ -273,6 +273,15 @@ Each JSON config defines:
 - `state`
 - `runtime`
 
+Keep the integration credentials outside the JSON configuration. The supported pattern is:
+
+```json
+"client_id": "${ENV:RUPMES_CLIENT_ID}",
+"api_key": "${ENV:RUPMES_API_KEY}"
+```
+
+Create `secrets.env` beside the configuration from `secrets.env.template`. Do not commit or package a real API key.
+
 ### Shared tracking rules
 
 - `source.date_field` is mandatory
@@ -328,14 +337,14 @@ SQL Server notes:
 {
   "name": "line_a_mysql",
   "api": {
-    "base_url": "http://localhost:8000",
+    "base_url": "https://api-rupmes.example.local",
     "endpoint": "/production-reports/ingest",
-    "client_id": "LINE-A-SQL",
-    "api_key": "super-secret-sql"
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}"
   },
   "source": {
     "type": "sql",
-    "connection_url": "mysql+pymysql://user:pass@localhost:3306/mes_source",
+    "connection_url": "${ENV:RUPMES_SOURCE_DATABASE_URL}",
     "schema": null,
     "table": "production_events",
     "query": null,
@@ -384,9 +393,9 @@ SQL Server notes:
 {
   "name": "line_a_mqtt",
   "api": {
-    "base_url": "http://localhost:8000",
-    "client_id": "LINE-A-MQTT",
-    "api_key": "super-secret-mqtt"
+    "base_url": "https://api-rupmes.example.local",
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}"
   },
   "source": {
     "type": "mqtt",
@@ -432,9 +441,9 @@ Expected MQTT message format:
 {
   "name": "line_a_opcua",
   "api": {
-    "base_url": "http://localhost:8000",
-    "client_id": "LINE-A-OPCUA",
-    "api_key": "super-secret-opcua"
+    "base_url": "https://api-rupmes.example.local",
+    "client_id": "${ENV:RUPMES_CLIENT_ID}",
+    "api_key": "${ENV:RUPMES_API_KEY}"
   },
   "source": {
     "type": "opcua",
@@ -494,6 +503,23 @@ WHERE event_ts > :since_ts
 ORDER BY event_ts ASC, id ASC
 LIMIT :limit
 ```
+
+## Dynamic routing traceability
+
+Use `templates/routing-process-result.json` when a station is part of a configured routing. The endpoint is `/routing-process-results/ingest`, and its mandatory values are `model_id`, `serial_number`, `process_id`, `result`, and `process_datetime`.
+
+The generic `payload.mappings` block supplies the common routing context. `payload.nested_mappings.result_values` supplies station-specific test values. The nested names must match the result-field codes configured in **Masters > Routings**.
+
+```json
+"nested_mappings": {
+  "result_values": {
+    "torque_nm": { "source": "actual_torque", "transform": "float" },
+    "angle_deg": { "source": "actual_angle", "transform": "float" }
+  }
+}
+```
+
+RupMes keeps the complete dynamic JSON for traceability. Fields configured as reportable are also normalized for reports and dashboards. Refer to `../Documentation/Routing_Traceability_Guide.md` for the portal setup, API payload, storage model, and complete SQL example.
 
 ## Recommended deployment model
 

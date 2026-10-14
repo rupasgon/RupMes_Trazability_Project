@@ -1,0 +1,69 @@
+{
+  "config_version": 1,
+  "line_id": "BMW_SZL_EOLT",
+  "line_name": "BMW SZL EOLT",
+  "timezone": "Europe/Madrid",
+  "demo_mode": false,
+  "storage": {
+    "database_path": "C:/ProgramData/RupMES Edge/data/rupmes-edge.db",
+    "retention_days": 90
+  },
+  "admin": {
+    "bind_host": "127.0.0.1",
+    "port": 8020,
+    "token_secret_ref": "RUPMES_EDGE_ADMIN_TOKEN"
+  },
+  "endpoints": [
+    {
+      "endpoint_id": "bmw-szl-plc",
+      "url": "opc.tcp://PLC-HOSTNAME-OR-IP:4840",
+      "subscription_interval_ms": 500,
+      "username": "rupmes_edge_reader",
+      "password_secret_ref": "RUPMES_EDGE_OPCUA_PASSWORD",
+      "security": {
+        "policy": "Basic256Sha256",
+        "mode": "SignAndEncrypt",
+        "client_certificate_path": "C:/ProgramData/RupMES Edge/certificates/client.der",
+        "private_key_path": "C:/ProgramData/RupMES Edge/certificates/client-key.pem",
+        "server_certificate_path": "C:/ProgramData/RupMES Edge/certificates/plc-server.der"
+      }
+    }
+  ],
+  "stations": [
+    {
+      "station_id": "ST01",
+      "name": "Loading station",
+      "endpoint_id": "bmw-szl-plc",
+      "target_cycle_seconds": 18.0,
+      "stale_after_seconds": 5,
+      "node_map": {
+        "Running": "ns=2;s=Stations.ST01.Running",
+        "CycleComplete": "ns=2;s=Stations.ST01.CycleComplete",
+        "CycleTime": "ns=2;s=Stations.ST01.CycleTime",
+        "PartsCounter": "ns=2;s=Stations.ST01.PartsCounter",
+        "FaultActive": "ns=2;s=Stations.ST01.FaultActive",
+        "AutoMode": "ns=2;s=Stations.ST01.AutoMode",
+        "AlarmCode": "ns=2;s=Stations.ST01.AlarmCode",
+        "Heartbeat": "ns=2;s=Stations.ST01.Heartbeat"
+      }
+    },
+    {
+      "station_id": "ST04",
+      "name": "Packaging station",
+      "endpoint_id": "bmw-szl-plc",
+      "target_cycle_seconds": 16.0,
+      "stale_after_seconds": 5,
+      "is_output_station": true,
+      "node_map": {
+        "Running": "ns=2;s=Stations.ST04.Running",
+        "CycleComplete": "ns=2;s=Stations.ST04.CycleComplete",
+        "CycleTime": "ns=2;s=Stations.ST04.CycleTime",
+        "PartsCounter": "ns=2;s=Stations.ST04.PartsCounter",
+        "FaultActive": "ns=2;s=Stations.ST04.FaultActive",
+        "AutoMode": "ns=2;s=Stations.ST04.AutoMode",
+        "AlarmCode": "ns=2;s=Stations.ST04.AlarmCode",
+        "Heartbeat": "ns=2;s=Stations.ST04.Heartbeat"
+      }
+    }
+  ]
+}

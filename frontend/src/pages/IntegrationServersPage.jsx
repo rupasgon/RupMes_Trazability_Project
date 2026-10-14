@@ -13,7 +13,7 @@ export default function IntegrationServersPage({ auth, onLogout, tenantId, setTe
   const [rule, setRule] = useState(emptyRule);
   const [selectedServer, setSelectedServer] = useState(null);
   const [selectedRule, setSelectedRule] = useState(null);
-  const [status, setStatus] = useState("");
+  const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(false);
   const canAdmin = useMemo(() => auth.permissions?.includes("production.admin"), [auth]);
   const currentTenant = tenantId || auth.tenant_id || "DEFAULT";
@@ -27,37 +27,41 @@ export default function IntegrationServersPage({ auth, onLogout, tenantId, setTe
     setRules(ruleRows);
   };
 
-  useEffect(() => { if (canAdmin) load().catch((error) => setStatus(error.message)); }, [canAdmin, currentTenant]);
+  const clearNotice = () => setNotice(null);
+  const showSuccess = (message) => setNotice({ tone: "success", message });
+  const showError = (message) => setNotice({ tone: "error", message });
+
+  useEffect(() => { if (canAdmin) load().catch((error) => showError(error.message)); }, [canAdmin, currentTenant]);
 
   const saveServer = async (event) => {
-    event.preventDefault(); setLoading(true); setStatus("");
+    event.preventDefault(); setLoading(true); clearNotice();
     try {
       const data = { ...server, timeout_seconds: Number(server.timeout_seconds), token_refresh_buffer_seconds: Number(server.token_refresh_buffer_seconds) };
       const path = selectedServer ? `/integration-servers/${selectedServer.server_id}` : "/integration-servers";
       if (selectedServer) delete data.server_id;
       await request(path, { method: selectedServer ? "PATCH" : "POST", data, tenantId: currentTenant, csrfToken });
-      setServer(emptyServer); setSelectedServer(null); await load(); setStatus(selectedServer ? "Servidor ERP actualizado" : "Servidor ERP creado");
-    } catch (error) { setStatus(error.message); } finally { setLoading(false); }
+      setServer(emptyServer); setSelectedServer(null); await load(); showSuccess(selectedServer ? "Servidor ERP actualizado" : "Servidor ERP creado");
+    } catch (error) { showError(error.message); } finally { setLoading(false); }
   };
 
   const saveRule = async (event) => {
-    event.preventDefault(); setLoading(true); setStatus("");
+    event.preventDefault(); setLoading(true); clearNotice();
     try {
       const data = { ...rule, server_id: Number(rule.server_id), dispatch_interval_seconds: Number(rule.dispatch_interval_seconds), batch_size: Number(rule.batch_size), max_retries: Number(rule.max_retries), lot_mask: rule.lot_mask || null, report_filter: JSON.parse(rule.report_filter || "{}"), mapping_config: JSON.parse(rule.mapping_config || "{}") };
       const path = selectedRule ? `/integration-delivery-rules/${selectedRule.rule_id}` : "/integration-delivery-rules";
       if (selectedRule) delete data.rule_id;
       await request(path, { method: selectedRule ? "PATCH" : "POST", data, tenantId: currentTenant, csrfToken });
-      setRule(emptyRule); setSelectedRule(null); await load(); setStatus(selectedRule ? "Regla de envío actualizada" : "Regla de envío creada");
-    } catch (error) { setStatus(error.message || "El JSON de filtro o mapeo no es válido"); } finally { setLoading(false); }
+      setRule(emptyRule); setSelectedRule(null); await load(); showSuccess(selectedRule ? "Regla de envío actualizada" : "Regla de envío creada");
+    } catch (error) { showError(error.message || "El JSON de filtro o mapeo no es válido"); } finally { setLoading(false); }
   };
 
   const remove = async (path) => {
     if (!window.confirm("¿Eliminar esta configuración?")) return;
-    try { await request(path, { method: "DELETE", tenantId: currentTenant, csrfToken }); await load(); } catch (error) { setStatus(error.message); }
+    try { await request(path, { method: "DELETE", tenantId: currentTenant, csrfToken }); await load(); showSuccess("Configuración eliminada"); } catch (error) { showError(error.message); }
   };
 
   const toggleRuleActive = async (item) => {
-    setLoading(true); setStatus("");
+    setLoading(true); clearNotice();
     try {
       const isActive = !item.is_active;
       await request(`/integration-delivery-rules/${item.rule_id}`, {
@@ -67,12 +71,12 @@ export default function IntegrationServersPage({ auth, onLogout, tenantId, setTe
         csrfToken,
       });
       await load();
-      setStatus(isActive ? "Regla activada" : "Regla desactivada");
-    } catch (error) { setStatus(error.message); } finally { setLoading(false); }
+      showSuccess(isActive ? "Regla activada" : "Regla desactivada");
+    } catch (error) { showError(error.message); } finally { setLoading(false); }
   };
 
   const toggleServerActive = async (item) => {
-    setLoading(true); setStatus("");
+    setLoading(true); clearNotice();
     try {
       const isActive = !item.is_active;
       await request(`/integration-servers/${item.server_id}`, {
@@ -82,28 +86,28 @@ export default function IntegrationServersPage({ auth, onLogout, tenantId, setTe
         csrfToken,
       });
       await load();
-      setStatus(isActive ? "Servidor ERP activado" : "Servidor ERP desactivado");
-    } catch (error) { setStatus(error.message); } finally { setLoading(false); }
+      showSuccess(isActive ? "Servidor ERP activado" : "Servidor ERP desactivado");
+    } catch (error) { showError(error.message); } finally { setLoading(false); }
   };
 
   const testServer = async (item) => {
-    setLoading(true); setStatus("");
+    setLoading(true); clearNotice();
     try {
       const result = await request(`/integration-servers/${item.server_id}/test`, { method: "POST", tenantId: currentTenant, csrfToken });
-      setStatus(`Conexión correcta: token OAuth obtenido${result.expires_in ? ` (caduca en ${result.expires_in} s)` : ""}.`);
-    } catch (error) { setStatus(`Prueba de conexión fallida: ${error.message}`); } finally { setLoading(false); }
+      showSuccess(`Conexión correcta: token OAuth obtenido${result.expires_in ? ` (caduca en ${result.expires_in} s)` : ""}.`);
+    } catch (error) { showError(`Prueba de conexión fallida: ${error.message}`); } finally { setLoading(false); }
   };
 
   const editServer = (item) => {
     setSelectedServer(item);
     setServer({ ...emptyServer, ...item, base_url: item.base_url || "", secret_ref: item.secret_ref || "" });
-    setStatus("");
+    clearNotice();
   };
 
   const editRule = (item) => {
     setSelectedRule(item);
     setRule({ ...emptyRule, ...item, server_id: String(item.server_id), report_filter: JSON.stringify(item.report_filter || {}, null, 2), mapping_config: JSON.stringify(item.mapping_config || {}, null, 2), lot_mask: item.lot_mask || "" });
-    setStatus("");
+    clearNotice();
   };
 
   return <Layout auth={auth} onLogout={onLogout} active="integrations" tenantId={tenantId} setTenantId={setTenantId} lang={lang} setLang={setLang} t={t} theme={theme} setTheme={setTheme}>
@@ -141,6 +145,6 @@ export default function IntegrationServersPage({ auth, onLogout, tenantId, setTe
         <div className="table-shell"><table className="table"><thead><tr><th>Regla</th><th>Destino</th><th>Lote</th><th>Estado</th><th /></tr></thead><tbody>{rules.map((item) => <tr key={item.id}><td>{item.rule_id}</td><td>{item.server_code}</td><td>{item.lot_mask || "-"}</td><td><span className={`status-chip ${item.is_active ? "ok" : ""}`}>{item.is_active ? "Activa" : "Inactiva"}</span></td><td><div className="table-actions"><button className="ghost compact" type="button" onClick={() => editRule(item)}>Editar</button><button className="secondary compact" type="button" disabled={loading} onClick={() => toggleRuleActive(item)}>{item.is_active ? "Desactivar" : "Activar"}</button><button className="danger compact" type="button" onClick={() => remove(`/integration-delivery-rules/${item.rule_id}`)}>Eliminar</button></div></td></tr>)}{!rules.length && <tr><td colSpan="5"><div className="empty-state table-empty-state">No hay reglas configuradas.</div></td></tr>}</tbody></table></div>
       </section>
     </div>}
-    {status ? <div className="notice">{status}</div> : null}
+    {notice ? <div className={`notice ${notice.tone}`}>{notice.message}</div> : null}
   </Layout>;
 }

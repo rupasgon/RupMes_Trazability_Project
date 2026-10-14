@@ -7,6 +7,10 @@ const emptyLine = { line_id: "", description_line: "" };
 export default function LinesPage({ auth, onLogout, tenantId, setTenantId, csrfToken, t, lang, setLang, theme, setTheme }) {
   const [lines, setLines] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [linkedCells, setLinkedCells] = useState([]);
+  const [cells, setCells] = useState([]);
+  const [plants, setPlants] = useState([]);
+  const [cellToLink, setCellToLink] = useState("");
   const [form, setForm] = useState(emptyLine);
   const [editorMode, setEditorMode] = useState("idle");
   const [status, setStatus] = useState("");
@@ -21,7 +25,9 @@ export default function LinesPage({ auth, onLogout, tenantId, setTenantId, csrfT
 
   useEffect(() => {
     loadLines().catch(() => {});
-  }, []);
+    request("/cells", { tenantId }).then(setCells).catch(() => {});
+    request("/plants", { tenantId }).then(setPlants).catch(() => {});
+  }, [tenantId]);
 
   const handleCreate = async (event) => {
     event.preventDefault();
@@ -46,8 +52,35 @@ export default function LinesPage({ auth, onLogout, tenantId, setTenantId, csrfT
 
   const handleSelect = (row) => {
     setSelected(row);
+    setLinkedCells([]);
     setEditorMode("edit");
-    setForm({ line_id: row.line_id, description_line: row.description_line });
+    setForm({ line_id: row.line_id, description_line: row.description_line, plant_id: row.plant_id || "" });
+    request(`/lines/${row.line_id}/cells`, { tenantId }).then(setLinkedCells).catch((error) => setStatus(error.message));
+  };
+
+  const linkCell = async () => {
+    if (!selected || !cellToLink) return;
+    await request(`/lines/${selected.line_id}/cells/${cellToLink}`, { method: "POST", tenantId, csrfToken });
+    setLinkedCells(await request(`/lines/${selected.line_id}/cells`, { tenantId })); setCellToLink("");
+  };
+
+  const unlinkCell = async (cell) => {
+    if (!selected) return;
+    setStatus("");
+    setLoading(true);
+    try {
+      await request(`/lines/${selected.line_id}/cells/${cell.cell_id}`, {
+        method: "DELETE",
+        tenantId,
+        csrfToken,
+      });
+      setLinkedCells((current) => current.filter((item) => item.cell_id !== cell.cell_id));
+      setStatus(`Celda ${cell.cell_id} desvinculada de la línea`);
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdate = async () => {
@@ -57,7 +90,7 @@ export default function LinesPage({ auth, onLogout, tenantId, setTenantId, csrfT
     try {
       await request(`/lines/${selected.line_id}`, {
         method: "PATCH",
-        data: { description_line: form.description_line },
+        data: { description_line: form.description_line, plant_id: form.plant_id || null },
         tenantId,
         csrfToken,
       });
@@ -176,6 +209,12 @@ export default function LinesPage({ auth, onLogout, tenantId, setTenantId, csrfT
                 <label>{t("fields.description")}</label>
                 <input value={form.description_line} onChange={(e) => setForm({ ...form, description_line: e.target.value })} />
               </div>
+              <div className="field"><label>Planta</label><select value={form.plant_id || ""} onChange={(e) => setForm({ ...form, plant_id: e.target.value })}><option value="">Sin asignar</option>{plants.map((plant) => <option key={plant.plant_id} value={plant.plant_id}>{plant.plant_id} · {plant.description_plant}</option>)}</select></div>
+              {selected ? <div className="field">
+                <label>Celdas vinculadas</label>
+                {linkedCells.length ? <div className="chip-list">{linkedCells.map((cell) => <span className="status-chip" key={cell.cell_id}>{cell.cell_id}<button type="button" disabled={!canWrite || loading} onClick={() => unlinkCell(cell)} title="Desvincular celda">×</button></span>)}</div> : <div className="muted">No hay celdas vinculadas.</div>}
+                <div className="inline-form"><select value={cellToLink} onChange={(e) => setCellToLink(e.target.value)}><option value="">Añadir celda</option>{cells.filter((cell) => !linkedCells.some((linked) => linked.cell_id === cell.cell_id)).map((cell) => <option key={cell.cell_id} value={cell.cell_id}>{cell.cell_id} · {cell.description_cell}</option>)}</select><button className="secondary" type="button" disabled={!cellToLink || loading} onClick={linkCell}>Vincular</button></div>
+              </div> : null}
               <div className={`editor-actions ${selected ? "" : "compact-end"}`}>
                 {selected ? (
                   <button className="danger" type="button" onClick={handleDelete} disabled={!canWrite || loading}>{t("common.delete")}</button>

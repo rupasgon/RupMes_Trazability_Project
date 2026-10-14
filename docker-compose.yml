@@ -33,6 +33,16 @@ services:
       db:
         condition: service_healthy
 
+  erp-delivery:
+    build: .
+    env_file:
+      - ${ENV_FILE:-.env}
+    command: ["python", "-m", "rupmes", "deliver-erp", "--interval", "${ERP_DELIVERY_INTERVAL:-30}"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

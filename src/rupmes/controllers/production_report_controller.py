@@ -78,9 +78,30 @@ def get_top_defects(
     plant_code: str | None = None,
     line_code: str | None = None,
     limit: int = 10,
+    aggregation: str = "events",
 ):
     repo = ProductionReportRepository(session)
-    return repo.top_defects(tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code, limit=limit)
+    return repo.top_defects(tenant_id=tenant_id, date_from=date_from, date_to=date_to, plant_code=plant_code, line_code=line_code, limit=limit, aggregation=aggregation)
+
+
+def get_packaging_parts_count(
+    session: Session,
+    station_code: str,
+    tenant_id: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    plant_code: str | None = None,
+    line_code: str | None = None,
+):
+    repo = ProductionReportRepository(session)
+    return repo.packaging_parts_count(
+        station_code=station_code,
+        tenant_id=tenant_id,
+        date_from=date_from,
+        date_to=date_to,
+        plant_code=plant_code,
+        line_code=line_code,
+    )
 
 
 def get_average_cycle_time_by_line(

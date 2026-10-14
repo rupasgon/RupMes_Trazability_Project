@@ -47,6 +47,7 @@ Copy the closest template to `config.json`, then copy `secrets.env.template` to 
 ```text
 RUPMES_CLIENT_ID=LINE-A-PLC
 RUPMES_API_KEY=the-key-generated-in-the-portal
+RUPMES_SOURCE_DATABASE_URL=mysql+pymysql://reader:password@127.0.0.1:3306/machine_source
 ```
 
 Values written as `${ENV:NAME}` in JSON are read from `secrets.env`. A system environment variable with the same name has precedence. Keep `secrets.env` restricted to the service account and out of backups shared outside OT.
@@ -143,11 +144,11 @@ Routings are configured in the portal under **Masters > Routings**. The hierarch
 1. A routing belongs to one existing `Line`; a line can contain several routings.
 2. One or more existing `Models` masters are assigned to each routing.
 3. Ordered processes, each linked to an existing `Cell`, define the physical flow such as `TORQUE`, `LEAK_TEST`, or `VISION`.
-4. A result schema per process. Each field has a code, label, type, required flag, and optional allowed values for lists.
+4. A result schema per process. Each field has a code, label, type, required flag, optional allowed values for lists, a reportable flag, and an optional unit.
 
 The source equipment must publish a process event to `POST /routing-process-results/ingest`. The integration credentials are the same `X-Client-Id` and `X-API-Key` used for production ingest. The model, process, and dynamic fields are validated against the active routing for that integration tenant.
 
-Use `templates/routing-process-result.json` as the connector starting point. It demonstrates the `nested_mappings` section, which creates the dynamic `result_values` object:
+Use `templates/routing-process-result.json` as the connector starting point. It demonstrates the `nested_mappings` section, which creates the dynamic `result_values` object. Each nested mapping name must exactly match a result-schema code configured for the process:
 
 ```json
 {
@@ -164,6 +165,22 @@ Use `templates/routing-process-result.json` as the connector starting point. It 
 ```
 
 Required top-level fields are `model_id`, `serial_number`, `process_id`, `result`, and `process_datetime`. Valid results are `OK`, `NOK`, and `SKIPPED`. A skipped process does not require its process fields. When the integration has plant, line, station, machine, or source-system restrictions, include matching values in the payload mappings.
+
+Fields marked **reportable** are stored twice in one transaction: the complete `result_values` JSON is preserved in `routing_process_results`, and a normalized row per field is saved in `traceability_measurements`. Reports and dashboards use the normalized values; non-reportable fields remain available as raw traceability evidence. This means every station can have a different result structure without needing a source or RupMes table per station.
+
+Example mapping for a torque station:
+
+```json
+"nested_mappings": {
+  "result_values": {
+    "torque_nm": { "source": "actual_torque", "transform": "float" },
+    "angle_deg": { "source": "actual_angle", "transform": "float" },
+    "program": { "source": "program_name", "transform": "string" }
+  }
+}
+```
+
+If the process schema defines `torque_nm` as reportable with unit `Nm`, its numeric value and unit are stored for analytics. See `../Documentation/Routing_Traceability_Guide.md` for the end-to-end portal and SQL configuration example.
 
 For SQL sources with `checkpoint_mode: "sequence"`, set `id_field` to an increasing source event ID and set `state.initial_value` to the initial ID, normally `0`. The connector then transfers only rows whose ID is greater than its saved checkpoint.
 

@@ -249,3 +249,54 @@ def test_production_report_analytics_and_validation():
     assert cycle_time.status_code == 200
     assert cycle_time.json()[0]["line_code"] == "LINE-A"
     assert cycle_time.json()[0]["sample_count"] == 3
+
+
+def test_unique_part_pareto_and_packaging_counter():
+    client, session_factory = _make_client()
+    _login_admin(client)
+    with session_factory() as session:
+        session.add_all([
+            ProductionReport(line_code="LINE-A", serial_number="RETESTED-OK", result="NOK", error_code="E101", production_datetime=datetime.fromisoformat("2026-05-26T08:00:00")),
+            ProductionReport(line_code="LINE-A", serial_number="RETESTED-OK", result="REWORK", rework_result="OK", error_code="E101", production_datetime=datetime.fromisoformat("2026-05-26T08:05:00")),
+            ProductionReport(line_code="LINE-A", serial_number="FINAL-NOK", result="NOK", error_code="E101", production_datetime=datetime.fromisoformat("2026-05-26T08:10:00")),
+            ProductionReport(line_code="LINE-A", station_code="GP12", serial_number="PACK-001", result="OK", production_datetime=datetime.fromisoformat("2026-05-26T09:00:00")),
+            ProductionReport(line_code="LINE-A", station_code="GP12", serial_number="PACK-001", result="OK", production_datetime=datetime.fromisoformat("2026-05-26T09:01:00")),
+        ])
+        session.commit()
+
+    events = client.get("/production-reports/analytics/top-defects?date_from=2026-05-26&date_to=2026-05-26&aggregation=events")
+    assert events.json()[0]["defect_count"] == 2
+    unique = client.get("/production-reports/analytics/top-defects?date_from=2026-05-26&date_to=2026-05-26&aggregation=final_part_result")
+    assert unique.json()[0]["defect_count"] == 1
+    packaging = client.get("/production-reports/analytics/packaging-parts-count?date_from=2026-05-26&date_to=2026-05-26&station_code=GP12")
+    assert packaging.json() == {"station_code": "GP12", "parts_count": 1}
+
+
+def test_wip_and_finished_box_share_the_production_report_endpoint():
+    client, _session_factory = _make_client()
+    csrf_token = _login_admin(client)
+
+    wip = client.post(
+        "/production-reports",
+        json={
+            "line_code": "LINE-A", "report_type": "WIP", "product_code": "RAW-100",
+            "material_lot": "LOT-01", "quantity": 12.5, "unit_of_measure": "KG",
+            "result": "OK", "production_datetime": "2026-09-29T09:00:00", "source_system": "DCS",
+        },
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert wip.status_code == 201
+    assert wip.json()["serial_number"] is None
+    assert wip.json()["report_type"] == "WIP"
+
+    box = client.post(
+        "/production-reports",
+        json={
+            "line_code": "LINE-A", "report_type": "FINISHED_BOX", "product_code": "5004703F",
+            "serial_number": "BOX-0001", "quantity": 61, "unit_of_measure": "EA",
+            "result": "OK", "production_datetime": "2026-09-29T09:01:00", "source_system": "DCS",
+        },
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert box.status_code == 201
+    assert box.json()["report_type"] == "FINISHED_BOX"
